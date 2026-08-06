@@ -53,6 +53,8 @@ extern const unsigned int margin;
 extern const char col_focus[];
 extern const char col_unfocus[];
 extern const int focusfollowsmouse;
+extern const char wsindfont[];      /* core X font for the workspace indicator */
+extern const unsigned int wsindms;  /* indicator display time in ms; 0 disables */
 extern const float defwidth;
 extern float *widths;
 extern size_t nwidths;

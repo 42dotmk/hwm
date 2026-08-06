@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
@@ -71,6 +72,7 @@ static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static void destroynotify(XEvent *e);
 static void enternotify(XEvent *e);
+static void expose(XEvent *e);
 static void focusin(XEvent *e);
 static void keypress(XEvent *e);
 static void mappingnotify(XEvent *e);
@@ -96,6 +98,12 @@ static Atom net_wmwintype, net_wmtype_notification;
 static Atom floattypes[6]; /* window types managed as floating */
 static Client *pressclient; /* client under the most recent button press */
 static Window checkwin;
+static Window indwin;       /* workspace indicator popup, bottom right */
+static GC indgc;
+static XFontStruct *indfont;
+static int indw, indh;
+static int indshown;
+static struct timespec indhide; /* when to unmap the indicator */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 
 static void (*handler[LASTEvent])(XEvent *) = {
@@ -105,6 +113,7 @@ static void (*handler[LASTEvent])(XEvent *) = {
 	[ConfigureRequest] = configurerequest,
 	[DestroyNotify] = destroynotify,
 	[EnterNotify] = enternotify,
+	[Expose] = expose,
 	[FocusIn] = focusin,
 	[KeyPress] = keypress,
 	[MappingNotify] = mappingnotify,
@@ -632,6 +641,91 @@ getrootptr(int *x, int *y)
 	return XQueryPointer(dpy, root, &dummy, &dummy, x, y, &di, &di, &dui);
 }
 
+/* workspace indicator: a small popup in the bottom-right corner showing the
+ * workspace number, unmapped again wsindms after the last switch */
+
+static void
+drawindicator(void)
+{
+	char text[16];
+	int len, tw;
+
+	len = snprintf(text, sizeof text, "%zu", curws + 1);
+	tw = XTextWidth(indfont, text, len);
+	XClearWindow(dpy, indwin);
+	XDrawString(dpy, indwin, indgc, (indw - tw) / 2,
+	            (indh - indfont->ascent - indfont->descent) / 2
+	            + indfont->ascent, text, len);
+}
+
+static void
+hideindicator(void)
+{
+	XUnmapWindow(dpy, indwin);
+	indshown = 0;
+}
+
+static long
+indicatorms(void)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (indhide.tv_sec - now.tv_sec) * 1000
+	       + (indhide.tv_nsec - now.tv_nsec) / 1000000;
+}
+
+static void
+showindicator(void)
+{
+	XSetWindowAttributes swa;
+	char text[16];
+	int len, tw, pad;
+
+	if (!wsindms)
+		return;
+	if (!indfont) {
+		indfont = XLoadQueryFont(dpy, wsindfont);
+		if (!indfont)
+			indfont = XLoadQueryFont(dpy, "fixed");
+		if (!indfont)
+			return;
+	}
+	if (!indwin) {
+		swa.override_redirect = True;
+		swa.background_pixel = unfocuspx;
+		swa.border_pixel = focuspx;
+		swa.event_mask = ExposureMask;
+		indwin = XCreateWindow(dpy, root, 0, 0, 1, 1, borderpx,
+		                       CopyFromParent, CopyFromParent,
+		                       CopyFromParent,
+		                       CWOverrideRedirect|CWBackPixel
+		                       |CWBorderPixel|CWEventMask, &swa);
+		indgc = XCreateGC(dpy, indwin, 0, NULL);
+		XSetFont(dpy, indgc, indfont->fid);
+		XSetForeground(dpy, indgc, focuspx);
+	}
+	len = snprintf(text, sizeof text, "%zu", curws + 1);
+	tw = XTextWidth(indfont, text, len);
+	pad = indfont->ascent + indfont->descent;
+	indh = 2 * pad;
+	indw = MAX(indh, tw + pad);
+	XMoveResizeWindow(dpy, indwin,
+	                  sw - indw - 2 * (int)borderpx - (int)padding,
+	                  sh - indh - 2 * (int)borderpx - (int)padding,
+	                  (unsigned int)indw, (unsigned int)indh);
+	XMapRaised(dpy, indwin);
+	drawindicator();
+	clock_gettime(CLOCK_MONOTONIC, &indhide);
+	indhide.tv_sec += wsindms / 1000;
+	indhide.tv_nsec += (long)(wsindms % 1000) * 1000000L;
+	if (indhide.tv_nsec >= 1000000000L) {
+		indhide.tv_sec++;
+		indhide.tv_nsec -= 1000000000L;
+	}
+	indshown = 1;
+}
+
 /* commands */
 
 void
@@ -823,6 +917,7 @@ view(const Arg *arg)
 	arrangews(old);
 	arrangews(curws);
 	focus(focused());
+	showindicator();
 }
 
 void
@@ -1145,6 +1240,15 @@ enternotify(XEvent *e)
 }
 
 static void
+expose(XEvent *e)
+{
+	XExposeEvent *ev = &e->xexpose;
+
+	if (indshown && ev->window == indwin && !ev->count)
+		drawindicator();
+}
+
+static void
 focusin(XEvent *e)
 {
 	Client *c = focused();
@@ -1438,6 +1542,7 @@ run(void)
 	XEvent ev;
 	fd_set fds;
 	struct timeval tv;
+	long ms;
 	int xfd = ConnectionNumber(dpy);
 
 	while (running) {
@@ -1452,6 +1557,16 @@ run(void)
 		FD_SET(xfd, &fds);
 		tv.tv_sec = 1;
 		tv.tv_usec = 0;
+		if (indshown) {
+			ms = indicatorms();
+			if (ms <= 0) {
+				hideindicator();
+				XFlush(dpy);
+			} else if (ms < 1000) {
+				tv.tv_sec = ms / 1000;
+				tv.tv_usec = (ms % 1000) * 1000;
+			}
+		}
 		if (select(xfd + 1, &fds, NULL, NULL, &tv) < 0) {
 			if (errno == EINTR)
 				continue;

@@ -14,6 +14,8 @@ const unsigned int margin   = 8;          /* gap between windows and columns */
 const char col_focus[]      = "#7aa2f7";  /* focused border color */
 const char col_unfocus[]    = "#3b4261";  /* unfocused border color */
 const int focusfollowsmouse = 0;
+const char wsindfont[]      = "10x20";    /* workspace indicator font ("fixed" as fallback) */
+const unsigned int wsindms  = 750;        /* workspace indicator display time in ms; 0 disables */
 
 /* layout */
 const float defwidth  = 0.5f;             /* width of new columns, fraction of screen */

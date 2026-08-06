@@ -728,6 +728,17 @@ showindicator(void)
 
 /* commands */
 
+/* drop fullscreen when focus moves away, so the new selection is visible */
+static void
+exitfull(Client *c)
+{
+	if (!c || !c->isfull)
+		return;
+	c->isfull = 0;
+	XSetWindowBorderWidth(dpy, c->win, borderpx);
+	arrangews(curws);
+}
+
 void
 focushorz(const Arg *arg)
 {
@@ -740,6 +751,7 @@ focushorz(const Arg *arg)
 	i = colidx(ws, ws->selcol) + (arg->i > 0 ? 1 : -1);
 	if (i < 0 || i >= arrlen(ws->cols))
 		return;
+	exitfull(focused());
 	col = ws->cols[i];
 	focus(col->sel ? col->sel : col->clients[0]);
 	ensurevisible(col);
@@ -757,6 +769,7 @@ focusvert(const Arg *arg)
 	i = clientidx(c->col, c) + (arg->i > 0 ? 1 : -1);
 	if (i < 0 || i >= arrlen(c->col->clients))
 		return;
+	exitfull(c);
 	focus(c->col->clients[i]);
 }
 

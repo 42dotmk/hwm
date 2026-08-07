@@ -19,7 +19,7 @@ const unsigned int wsindms  = 750;        /* workspace indicator display time in
 
 /* layout */
 const float defwidth  = 0.5f;             /* width of new columns, fraction of screen */
-const size_t nworkspaces = 9;
+const size_t nworkspaces = 10;
 
 /* stb_ds arrays, built by initconfig() */
 float *widths;
@@ -34,7 +34,8 @@ static const char *wincmd[]     = { "rofi", "-show", "window", NULL };
 static const char *browsercmd[] = { "firefox", NULL };
 static const char *filescmd[]   = { "thunar", NULL };
 static const char *tmuxcmd[]    = { "alacritty", "-e", "tmux", "new-session", "-A", "-s", "main", NULL };
-
+static const char *mailcmd[] 	= { "alacritty", "-e", "hed", "-c", "mail"};
+static const char *calcmd[] 	= { "firefox", "https://calendar.google.com"};
 /* special keys (bound with no modifier, like niri's defaults) */
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };
@@ -56,6 +57,8 @@ static const Key basekeys[] = {
 	{ MODKEY,              XK_b,           spawn,       { .v = browsercmd } },
 	{ MODKEY,              XK_e,           spawn,       { .v = filescmd } },
 	{ MODKEY|ShiftMask,    XK_Return,      spawn,       { .v = tmuxcmd } },
+	{ MODKEY,    		   XK_m,           spawn,       { .v = mailcmd} },
+	{ MODKEY,    		   XK_c,           spawn,       { .v = calcmd} },
 	{ MODKEY,              XK_q,           killclient,  {0} },
 	{ MODKEY|ShiftMask,    XK_e,           quit,        {0} },
 	{ MODKEY|ShiftMask,    XK_r,           restart,     {0} },
@@ -129,10 +132,11 @@ initconfig(void)
 	for (i = 0; i < COUNT(basekeys); i++)
 		arrput(keys, basekeys[i]);
 	/* Mod+N views workspace N, Mod+Shift+N sends the focused window there */
-	for (i = 0; i < nworkspaces && i < 9; i++) {
-		arrput(keys, ((Key){ MODKEY, XK_1 + i,
+	for (i = 0; i < nworkspaces ; i++) {
+		arrput(keys, ((Key){ MODKEY, XK_0 + i,
 		                     view, { .i = (int)i } }));
-		arrput(keys, ((Key){ MODKEY|ShiftMask, XK_1 + i,
+		                     
+		arrput(keys, ((Key){ MODKEY|ShiftMask, XK_0 + i,
 		                     sendto, { .i = (int)i } }));
 	}
 	for (i = 0; i < COUNT(basebuttons); i++)

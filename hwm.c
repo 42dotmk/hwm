@@ -61,8 +61,10 @@ struct Column {
 typedef struct {
 	Column **cols;   /* stb_ds array, left to right */
 	Column *selcol;
+
 	Client **floats; /* stb_ds array, floating windows, bottom to top */
 	Client *floatsel; /* focused floating window, or NULL */
+	
 	int scroll;      /* viewport offset in px */
 } Workspace;
 
@@ -650,7 +652,7 @@ drawindicator(void)
 	char text[16];
 	int len, tw;
 
-	len = snprintf(text, sizeof text, "%zu", curws + 1);
+	len = snprintf(text, sizeof text, "%zu", curws );
 	tw = XTextWidth(indfont, text, len);
 	XClearWindow(dpy, indwin);
 	XDrawString(dpy, indwin, indgc, (indw - tw) / 2,

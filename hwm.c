@@ -567,7 +567,11 @@ manage(Window w)
 	for (i = 0; i < LENGTH(floattypes); i++)
 		if (type == floattypes[i])
 			c->isfloating = 1;
-	if (XGetTransientForHint(dpy, w, &trans) || isfixedsize(w))
+	/* transient windows float, but only when the parent is a real
+	 * managed window: SDL and friends set WM_TRANSIENT_FOR to the
+	 * root window on ordinary top-levels */
+	if ((XGetTransientForHint(dpy, w, &trans) && findclient(trans))
+	    || isfixedsize(w))
 		c->isfloating = 1;
 	if (c->isfloating) {
 		/* keep the requested geometry; center windows that didn't ask
@@ -707,7 +711,7 @@ showindicator(void)
 		XSetFont(dpy, indgc, indfont->fid);
 		XSetForeground(dpy, indgc, focuspx);
 	}
-	len = snprintf(text, sizeof text, "%zu", curws + 1);
+	len = snprintf(text, sizeof text, "%zu", curws);
 	tw = XTextWidth(indfont, text, len);
 	pad = indfont->ascent + indfont->descent;
 	indh = 2 * pad;

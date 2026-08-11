@@ -34,8 +34,8 @@ static const char *wincmd[]     = { "rofi", "-show", "window", NULL };
 static const char *browsercmd[] = { "firefox", NULL };
 static const char *filescmd[]   = { "thunar", NULL };
 static const char *tmuxcmd[]    = { "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL };
-static const char *mailcmd[] 	= { "hterm", "-e", "hed", "-c", "mail"};
-static const char *calcmd[] 	= { "firefox", "https://calendar.google.com"};
+static const char *mailcmd[] 	= { "hterm", "-e", "hed", "-c", "mail", NULL };
+static const char *calcmd[] 	= { "firefox", "https://calendar.google.com", NULL };
 /* special keys (bound with no modifier, like niri's defaults) */
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };

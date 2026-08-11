@@ -46,7 +46,6 @@ struct Client {
 	Window win;
 	Column *col;      /* NULL while floating */
 	int x, y, w, h;   /* last applied geometry */
-	int isfull;
 	int isfloating;
 	size_t ws;
 };
@@ -55,6 +54,7 @@ struct Column {
 	Client **clients; /* stb_ds array, top to bottom */
 	Client *sel;      /* focused window of this column */
 	float width;      /* fraction of the usable screen width */
+	int full;         /* spans the whole screen, no gaps or borders */
 	size_t ws;
 };
 
@@ -212,6 +212,8 @@ useh(void)
 static int
 colpx(Column *col)
 {
+	if (col->full)
+		return sw;
 	return MAX(50, (int)(col->width * (float)usew()));
 }
 
@@ -296,7 +298,7 @@ arrangews(size_t wi)
 	ptrdiff_t ci, i, n;
 	int uh = useh();
 	int xoff = (wi == curws) ? 0 : -3 * sw; /* park hidden workspaces offscreen */
-	int x, y, cw, h, each;
+	int x, y, cw, h, each, bw, cx, cy, ch;
 
 	clampscroll(ws);
 	x = (int)padding - ws->scroll;
@@ -305,36 +307,31 @@ arrangews(size_t wi)
 		cw = colpx(col);
 		n = arrlen(col->clients);
 		if (n) {
-			each = MAX(1, (uh - ((int)n - 1) * (int)margin) / (int)n);
-			y = (int)padding;
+			/* a full column ignores padding and borders */
+			bw = col->full ? 0 : (int)borderpx;
+			cx = col->full ? x - (int)padding : x;
+			cy = col->full ? 0 : (int)padding;
+			ch = col->full ? sh : uh;
+			each = MAX(1, (ch - ((int)n - 1) * (int)margin) / (int)n);
+			y = cy;
 			for (i = 0; i < n; i++) {
 				c = col->clients[i];
-				h = i + 1 < n ? each : (int)padding + uh - y;
-				resizeclient(c, xoff + x, y,
-				             cw - 2 * (int)borderpx,
-				             h - 2 * (int)borderpx);
+				h = i + 1 < n ? each : cy + ch - y;
+				XSetWindowBorderWidth(dpy, c->win,
+				                      (unsigned int)bw);
+				resizeclient(c, xoff + cx, y,
+				             cw - 2 * bw, h - 2 * bw);
 				y += h + (int)margin;
 			}
 		}
 		x += cw + (int)margin;
 	}
-	for (ci = 0; ci < arrlen(ws->cols); ci++)
-		for (i = 0; i < arrlen(ws->cols[ci]->clients); i++) {
-			c = ws->cols[ci]->clients[i];
-			if (c->isfull) {
-				resizeclient(c, xoff, 0, sw, sh);
-				XRaiseWindow(dpy, c->win);
-			}
-		}
 	/* floats keep their own geometry and stay above the strip */
 	for (i = 0; i < arrlen(ws->floats); i++) {
 		c = ws->floats[i];
-		if (c->isfull)
-			XMoveResizeWindow(dpy, c->win, xoff, 0,
-			                  (unsigned int)sw, (unsigned int)sh);
-		else
-			XMoveResizeWindow(dpy, c->win, xoff + c->x, c->y,
-			                  (unsigned int)c->w, (unsigned int)c->h);
+		XSetWindowBorderWidth(dpy, c->win, borderpx);
+		XMoveResizeWindow(dpy, c->win, xoff + c->x, c->y,
+		                  (unsigned int)c->w, (unsigned int)c->h);
 		XRaiseWindow(dpy, c->win);
 	}
 }
@@ -484,7 +481,7 @@ sendconfigure(Client *c)
 	ce.y = c->y;
 	ce.width = c->w;
 	ce.height = c->h;
-	ce.border_width = c->isfull ? 0 : (int)borderpx;
+	ce.border_width = c->col && c->col->full ? 0 : (int)borderpx;
 	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
 }
 
@@ -734,17 +731,6 @@ showindicator(void)
 
 /* commands */
 
-/* drop fullscreen when focus moves away, so the new selection is visible */
-static void
-exitfull(Client *c)
-{
-	if (!c || !c->isfull)
-		return;
-	c->isfull = 0;
-	XSetWindowBorderWidth(dpy, c->win, borderpx);
-	arrangews(curws);
-}
-
 void
 focushorz(const Arg *arg)
 {
@@ -757,7 +743,6 @@ focushorz(const Arg *arg)
 	i = colidx(ws, ws->selcol) + (arg->i > 0 ? 1 : -1);
 	if (i < 0 || i >= arrlen(ws->cols))
 		return;
-	exitfull(focused());
 	col = ws->cols[i];
 	focus(col->sel ? col->sel : col->clients[0]);
 	ensurevisible(col);
@@ -775,7 +760,6 @@ focusvert(const Arg *arg)
 	i = clientidx(c->col, c) + (arg->i > 0 ? 1 : -1);
 	if (i < 0 || i >= arrlen(c->col->clients))
 		return;
-	exitfull(c);
 	focus(c->col->clients[i]);
 }
 
@@ -887,8 +871,10 @@ togglefull(const Arg *arg)
 	(void)arg;
 	if (!c)
 		return;
-	c->isfull = !c->isfull;
-	XSetWindowBorderWidth(dpy, c->win, c->isfull ? 0 : borderpx);
+	if (c->isfloating)
+		togglefloat(NULL); /* tile it; a full column is just a column */
+	c->col->full = !c->col->full;
+	ensurevisible(c->col);
 	arrangews(curws);
 }
 
@@ -1060,7 +1046,7 @@ dragscroll(const Arg *arg)
 	XEvent ev;
 
 	(void)arg;
-	if (pressclient && pressclient->isfloating && !pressclient->isfull) {
+	if (pressclient && pressclient->isfloating) {
 		dragfloat(pressclient, 0);
 		return;
 	}
@@ -1098,7 +1084,7 @@ dragwidth(const Arg *arg)
 	XEvent ev;
 
 	(void)arg;
-	if (pressclient && pressclient->isfloating && !pressclient->isfull) {
+	if (pressclient && pressclient->isfloating) {
 		dragfloat(pressclient, 1);
 		return;
 	}
@@ -1202,7 +1188,7 @@ configurerequest(XEvent *e)
 	Client *c = findclient(ev->window);
 	XWindowChanges wc;
 
-	if (c && c->isfloating && !c->isfull) {
+	if (c && c->isfloating) {
 		/* floats may place themselves (notifications, dialogs) */
 		if (ev->value_mask & CWX)
 			c->x = ev->x;

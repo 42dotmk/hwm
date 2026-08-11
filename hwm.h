@@ -33,7 +33,7 @@ void movevert(const Arg *arg);    /* move window up or down in its column */
 void cyclewidth(const Arg *arg);  /* cycle column width through widths[] */
 void growwidth(const Arg *arg);   /* .f = width delta, fraction of screen */
 void scrollby(const Arg *arg);    /* .f = scroll delta, fraction of screen */
-void togglefull(const Arg *arg);  /* fullscreen the focused window */
+void togglefull(const Arg *arg);  /* fullscreen the focused column */
 void togglefloat(const Arg *arg); /* float/tile the focused window */
 void view(const Arg *arg);        /* .i = workspace to show */
 void sendto(const Arg *arg);      /* .i = workspace to send window to */

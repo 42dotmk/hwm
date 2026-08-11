@@ -37,7 +37,6 @@ static const char *tmuxcmd[]    = { "hterm", "-e", "tmux", "new-session", "-A", 
 static const char *mailcmd[] 	= { "hterm", "-e", "hed", "-c", "mail", NULL };
 static const char *calcmd[] 	= { "firefox", "https://calendar.google.com", NULL };
 static const char *traycmd[] 	= { "pkill", "-USR1", "-x", "htray", NULL };
-/* special keys (bound with no modifier, like niri's defaults) */
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };
 static const char *mutecmd[]    = { "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL };
@@ -48,7 +47,6 @@ static const char *playcmd[]    = { "playerctl", "play-pause", NULL };
 static const char *nextcmd[]    = { "playerctl", "next", NULL };
 static const char *prevcmd[]    = { "playerctl", "previous", NULL };
 
-static const float widthpresets[] = { 1.0f/3.0f, 0.5f, 2.0f/3.0f, 1.0f }; /* cyclewidth */
 
 static const Key basekeys[] = {
 	/* modifier            key             function     argument */
@@ -95,6 +93,8 @@ static const Key basekeys[] = {
 	{ MODKEY|ShiftMask,    XK_space,       togglefloat, {0} },
 	{ MODKEY,              XK_bracketleft, scrollby,    { .f = -0.25f } },
 	{ MODKEY,              XK_bracketright,scrollby,    { .f = +0.25f } },
+	{ MODKEY,              XK_comma,       movewsmon,   { .i = -1 } },
+	{ MODKEY,              XK_period,      movewsmon,   { .i = +1 } },
 
 	{ 0, XF86XK_AudioRaiseVolume,  spawn, { .v = volupcmd } },
 	{ 0, XF86XK_AudioLowerVolume,  spawn, { .v = voldowncmd } },
@@ -127,7 +127,7 @@ static const char *autostartcmds[] = {
 };
 
 #define COUNT(X) (sizeof(X) / sizeof((X)[0]))
-
+static const float widthpresets[] = { 1.0f/3.0f, 0.5f, 2.0f/3.0f, 1.0f }; /* cyclewidth */
 void
 initconfig(void)
 {

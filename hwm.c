@@ -23,6 +23,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xproto.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/Xrandr.h>
 
 #include "hwm.h"
 
@@ -64,9 +65,15 @@ typedef struct {
 
 	Client **floats; /* stb_ds array, floating windows, bottom to top */
 	Client *floatsel; /* focused floating window, or NULL */
-	
+
 	int scroll;      /* viewport offset in px */
+	size_t mon;      /* monitor this workspace lives on */
 } Workspace;
+
+typedef struct {
+	int x, y, w, h;  /* geometry from RandR */
+	size_t ws;       /* workspace shown here (nworkspaces = none) */
+} Monitor;
 
 static void buttonpress(XEvent *e);
 static void clientmessage(XEvent *e);
@@ -88,6 +95,8 @@ static unsigned long focuspx, unfocuspx;
 static unsigned int numlockmask;
 static Workspace *wss;
 static size_t curws;
+static Monitor *mons;    /* stb_ds array, left to right */
+static int rrbase = -1;  /* RandR event base; -1 without the extension */
 static int running = 1;
 static int dorestart;
 static char selfpath[PATH_MAX];
@@ -197,24 +206,40 @@ floatidx(Workspace *ws, Client *c)
 	return -1;
 }
 
-static int
-usew(void)
+static Monitor *
+wsmon(size_t wi)
 {
-	return sw - 2 * (int)padding;
+	size_t m = wss[wi].mon;
+
+	return &mons[m < (size_t)arrlen(mons) ? m : 0];
 }
 
 static int
-useh(void)
+wsvisible(size_t wi)
 {
-	return sh - 2 * (int)padding;
+	return wsmon(wi)->ws == wi;
+}
+
+static int
+usew(Monitor *m)
+{
+	return m->w - 2 * (int)padding;
+}
+
+static int
+useh(Monitor *m)
+{
+	return m->h - 2 * (int)padding;
 }
 
 static int
 colpx(Column *col)
 {
+	Monitor *m = wsmon(col->ws);
+
 	if (col->full)
-		return sw;
-	return MAX(50, (int)(col->width * (float)usew()));
+		return m->w;
+	return MAX(50, (int)(col->width * (float)usew(m)));
 }
 
 static int
@@ -237,7 +262,7 @@ clampscroll(Workspace *ws)
 	for (i = 0; i < arrlen(ws->cols); i++)
 		tw += colpx(ws->cols[i])
 		      + (i + 1 < arrlen(ws->cols) ? (int)margin : 0);
-	max = MAX(0, tw - usew());
+	max = MAX(0, tw - usew(wsmon((size_t)(ws - wss))));
 	if (ws->scroll > max)
 		ws->scroll = max;
 	if (ws->scroll < 0)
@@ -248,7 +273,7 @@ static void
 ensurevisible(Column *col)
 {
 	Workspace *ws = &wss[col->ws];
-	int vx = colvx(ws, col), cw = colpx(col), uw = usew();
+	int vx = colvx(ws, col), cw = colpx(col), uw = usew(wsmon(col->ws));
 
 	if (cw >= uw || vx < ws->scroll)
 		ws->scroll = vx;
@@ -293,11 +318,12 @@ static void
 arrangews(size_t wi)
 {
 	Workspace *ws = &wss[wi];
+	Monitor *m = wsmon(wi);
 	Column *col;
 	Client *c;
 	ptrdiff_t ci, i, n;
-	int uh = useh();
-	int xoff = (wi == curws) ? 0 : -3 * sw; /* park hidden workspaces offscreen */
+	int uh = useh(m);
+	int xoff = wsvisible(wi) ? 0 : -3 * sw; /* park hidden workspaces offscreen */
 	int x, y, cw, h, each, bw, cx, cy, ch;
 
 	clampscroll(ws);
@@ -311,7 +337,7 @@ arrangews(size_t wi)
 			bw = col->full ? 0 : (int)borderpx;
 			cx = col->full ? x - (int)padding : x;
 			cy = col->full ? 0 : (int)padding;
-			ch = col->full ? sh : uh;
+			ch = col->full ? m->h : uh;
 			each = MAX(1, (ch - ((int)n - 1) * (int)margin) / (int)n);
 			y = cy;
 			for (i = 0; i < n; i++) {
@@ -319,14 +345,14 @@ arrangews(size_t wi)
 				h = i + 1 < n ? each : cy + ch - y;
 				XSetWindowBorderWidth(dpy, c->win,
 				                      (unsigned int)bw);
-				resizeclient(c, xoff + cx, y,
+				resizeclient(c, xoff + m->x + cx, m->y + y,
 				             cw - 2 * bw, h - 2 * bw);
 				y += h + (int)margin;
 			}
 		}
 		x += cw + (int)margin;
 	}
-	/* floats keep their own geometry and stay above the strip */
+	/* floats keep their own (absolute) geometry above the strip */
 	for (i = 0; i < arrlen(ws->floats); i++) {
 		c = ws->floats[i];
 		XSetWindowBorderWidth(dpy, c->win, borderpx);
@@ -391,10 +417,16 @@ grabbuttons(Client *c, int isfocused)
 static void
 focus(Client *c)
 {
-	Workspace *ws = curwsp();
+	Workspace *ws;
 	Client *i;
 	ptrdiff_t ci, j;
 
+	/* focusing a window on another (visible) workspace follows it there */
+	if (c && c->ws != curws && wsvisible(c->ws)) {
+		curws = c->ws;
+		setcardinal(root, net_curdesktop, (long)curws);
+	}
+	ws = curwsp();
 	if (c) {
 		if (c->isfloating) {
 			ws->floatsel = c;
@@ -571,22 +603,24 @@ manage(Window w)
 	    || isfixedsize(w))
 		c->isfloating = 1;
 	if (c->isfloating) {
+		Monitor *m = wsmon(curws);
+
 		/* keep the requested geometry; center windows that didn't ask
-		 * for a position, clamp the rest onto the screen */
+		 * for a position, clamp the rest onto their monitor */
 		c->w = MAX(1, wa.width);
 		c->h = MAX(1, wa.height);
 		c->x = wa.x;
 		c->y = wa.y;
 		if (c->x <= 0 && c->y <= 0) {
-			c->x = (sw - c->w) / 2;
-			c->y = (sh - c->h) / 2;
+			c->x = m->x + (m->w - c->w) / 2;
+			c->y = m->y + (m->h - c->h) / 2;
 		}
-		if (c->x + c->w + 2 * (int)borderpx > sw)
-			c->x = sw - c->w - 2 * (int)borderpx;
-		if (c->y + c->h + 2 * (int)borderpx > sh)
-			c->y = sh - c->h - 2 * (int)borderpx;
-		c->x = MAX(0, c->x);
-		c->y = MAX(0, c->y);
+		if (c->x + c->w + 2 * (int)borderpx > m->x + m->w)
+			c->x = m->x + m->w - c->w - 2 * (int)borderpx;
+		if (c->y + c->h + 2 * (int)borderpx > m->y + m->h)
+			c->y = m->y + m->h - c->h - 2 * (int)borderpx;
+		c->x = MAX(m->x, c->x);
+		c->y = MAX(m->y, c->y);
 		arrput(ws->floats, c);
 		if (type == net_wmtype_notification)
 			wantfocus = 0; /* notifications must not steal focus */
@@ -644,6 +678,90 @@ getrootptr(int *x, int *y)
 	return XQueryPointer(dpy, root, &dummy, &dummy, x, y, &di, &di, &dui);
 }
 
+/* the active monitor is the one under the pointer */
+static size_t
+activemon(void)
+{
+	int x, y;
+	ptrdiff_t i;
+
+	if (getrootptr(&x, &y))
+		for (i = 0; i < arrlen(mons); i++)
+			if (x >= mons[i].x && x < mons[i].x + mons[i].w
+			    && y >= mons[i].y && y < mons[i].y + mons[i].h)
+				return (size_t)i;
+	return wss[curws].mon;
+}
+
+/* keep the mouse on the monitor that has the focus */
+static void
+warptomon(size_t m)
+{
+	if (activemon() != m)
+		XWarpPointer(dpy, None, root, 0, 0, 0, 0,
+		             mons[m].x + mons[m].w / 2,
+		             mons[m].y + mons[m].h / 2);
+}
+
+/* refresh the monitor list from RandR. A new monitor takes over the first
+ * hidden workspace; workspaces of detached monitors move to the active one. */
+static void
+updatemons(void)
+{
+	XRRMonitorInfo *info = NULL, t;
+	int i, j, n = 0;
+	ptrdiff_t oldn = arrlen(mons), m;
+	size_t k, am;
+
+	if (rrbase >= 0)
+		info = XRRGetMonitors(dpy, root, True, &n);
+	if (n < 1)
+		n = 1; /* fallback: one monitor covering the whole screen */
+	if (info)
+		for (i = 1; i < n; i++) /* sort left to right */
+			for (j = i; j > 0 && info[j - 1].x > info[j].x; j--) {
+				t = info[j - 1];
+				info[j - 1] = info[j];
+				info[j] = t;
+			}
+	arrsetlen(mons, n);
+	for (i = 0; i < n; i++) {
+		mons[i].x = info ? info[i].x : 0;
+		mons[i].y = info ? info[i].y : 0;
+		mons[i].w = info ? info[i].width : sw;
+		mons[i].h = info ? info[i].height : sh;
+		if (i >= oldn)
+			mons[i].ws = nworkspaces;
+	}
+	if (info)
+		XRRFreeMonitors(info);
+	if (!oldn)
+		mons[0].ws = curws;
+	if ((ptrdiff_t)n < oldn) {
+		am = activemon();
+		if (am >= (size_t)n) /* pointer on a dead monitor */
+			am = 0;
+		for (k = 0; k < nworkspaces; k++)
+			if (wss[k].mon >= (size_t)n)
+				wss[k].mon = am;
+		mons[wss[curws].mon].ws = curws; /* keep the focus visible */
+	}
+	for (m = 0; m < (ptrdiff_t)n; m++) {
+		if (mons[m].ws < nworkspaces
+		    && wss[mons[m].ws].mon == (size_t)m)
+			continue;
+		mons[m].ws = nworkspaces;
+		for (k = 0; k < nworkspaces; k++)
+			if (!wsvisible(k)) { /* first hidden workspace */
+				wss[k].mon = (size_t)m;
+				mons[m].ws = k;
+				break;
+			}
+	}
+	for (k = 0; k < nworkspaces; k++)
+		arrangews(k);
+}
+
 /* workspace indicator: a small popup in the bottom-right corner showing the
  * workspace number, unmapped again wsindms after the last switch */
 
@@ -682,6 +800,7 @@ static void
 showindicator(void)
 {
 	XSetWindowAttributes swa;
+	Monitor *m;
 	char text[16];
 	int len, tw, pad;
 
@@ -713,9 +832,10 @@ showindicator(void)
 	pad = indfont->ascent + indfont->descent;
 	indh = 2 * pad;
 	indw = MAX(indh, tw + pad);
+	m = wsmon(curws);
 	XMoveResizeWindow(dpy, indwin,
-	                  sw - indw - 2 * (int)borderpx - (int)padding,
-	                  sh - indh - 2 * (int)borderpx - (int)padding,
+	                  m->x + m->w - indw - 2 * (int)borderpx - (int)padding,
+	                  m->y + m->h - indh - 2 * (int)borderpx - (int)padding,
 	                  (unsigned int)indw, (unsigned int)indh);
 	XMapRaised(dpy, indwin);
 	drawindicator();
@@ -885,7 +1005,7 @@ growwidth(const Arg *arg)
 void
 scrollby(const Arg *arg)
 {
-	curwsp()->scroll += (int)(arg->f * (float)usew());
+	curwsp()->scroll += (int)(arg->f * (float)usew(wsmon(curws)));
 	arrangews(curws);
 }
 
@@ -938,15 +1058,57 @@ togglefloat(const Arg *arg)
 void
 view(const Arg *arg)
 {
-	size_t old = curws;
+	size_t old, m;
 
 	if (arg->i < 0 || (size_t)arg->i >= nworkspaces
 	    || (size_t)arg->i == curws)
 		return;
 	curws = (size_t)arg->i;
+	m = wss[curws].mon;
+	old = mons[m].ws; /* the workspace this monitor showed before */
+	mons[m].ws = curws;
 	setcardinal(root, net_curdesktop, (long)curws);
-	arrangews(old);
+	if (old < nworkspaces && old != curws)
+		arrangews(old);
 	arrangews(curws);
+	warptomon(m);
+	focus(focused());
+	showindicator();
+}
+
+/* move the focused workspace to the adjacent monitor and follow it */
+void
+movewsmon(const Arg *arg)
+{
+	size_t om = wss[curws].mon, k, r = nworkspaces, prev;
+	ptrdiff_t nm;
+
+	if (arrlen(mons) < 2)
+		return;
+	nm = (ptrdiff_t)om + (arg->i > 0 ? 1 : -1);
+	if (nm < 0)
+		nm = arrlen(mons) - 1;
+	else if (nm >= arrlen(mons))
+		nm = 0;
+	/* the old monitor needs another workspace to show */
+	for (k = 0; k < nworkspaces && r == nworkspaces; k++)
+		if (k != curws && wss[k].mon == om)
+			r = k;
+	for (k = 0; k < nworkspaces && r == nworkspaces; k++)
+		if (k != curws && !wsvisible(k))
+			r = k;
+	if (r == nworkspaces)
+		return;
+	wss[r].mon = om;
+	mons[om].ws = r;
+	prev = mons[nm].ws;
+	wss[curws].mon = (size_t)nm;
+	mons[nm].ws = curws;
+	if (prev < nworkspaces && prev != curws)
+		arrangews(prev);
+	arrangews(r);
+	arrangews(curws);
+	warptomon((size_t)nm);
 	focus(focused());
 	showindicator();
 }
@@ -1134,7 +1296,7 @@ dragwidth(const Arg *arg)
 				break;
 			last = ev.xmotion.time;
 			w = start + (float)(ev.xmotion.x_root - rx)
-			    / (float)usew();
+			    / (float)usew(wsmon(col->ws));
 			if (w < 0.1f)
 				w = 0.1f;
 			if (w > 1.0f)
@@ -1149,6 +1311,19 @@ dragwidth(const Arg *arg)
 
 /* event handlers */
 
+/* the mouse picks the active monitor: input acts on its visible workspace */
+static void
+syncactivemon(void)
+{
+	size_t k = mons[activemon()].ws;
+
+	if (k < nworkspaces && k != curws) {
+		curws = k;
+		setcardinal(root, net_curdesktop, (long)curws);
+		focus(focused());
+	}
+}
+
 static void
 buttonpress(XEvent *e)
 {
@@ -1156,6 +1331,7 @@ buttonpress(XEvent *e)
 	Client *c = findclient(ev->window);
 	size_t i;
 
+	syncactivemon();
 	pressclient = c;
 	if (c) {
 		if (c != focused())
@@ -1197,13 +1373,11 @@ static void
 configurenotify(XEvent *e)
 {
 	XConfigureEvent *ev = &e->xconfigure;
-	size_t i;
 
 	if (ev->window == root && (ev->width != sw || ev->height != sh)) {
 		sw = ev->width;
 		sh = ev->height;
-		for (i = 0; i < nworkspaces; i++)
-			arrangews(i);
+		updatemons();
 	}
 }
 
@@ -1295,6 +1469,7 @@ keypress(XEvent *e)
 	KeySym keysym = XkbKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0, 0);
 	size_t i;
 
+	syncactivemon();
 	for (i = 0; i < nkeys; i++)
 		if (keysym == keys[i].keysym && keys[i].func
 		    && CLEANMASK(keys[i].mod) == CLEANMASK(ev->state))
@@ -1443,6 +1618,8 @@ initewmh(void)
 static void
 setup(void)
 {
+	int di;
+
 	signal(SIGCHLD, SIG_IGN); /* auto-reap spawned children */
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("hwm: cannot open display");
@@ -1459,6 +1636,12 @@ setup(void)
 	XSync(dpy, False);
 
 	wss = ecalloc(nworkspaces, sizeof(Workspace));
+	if (XRRQueryExtension(dpy, &rrbase, &di))
+		XRRSelectInput(dpy, root, RRScreenChangeNotifyMask
+		               |RRCrtcChangeNotifyMask|RROutputChangeNotifyMask);
+	else
+		rrbase = -1;
+	updatemons();
 	focuspx = getcolor(col_focus);
 	unfocuspx = getcolor(col_unfocus);
 	wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
@@ -1579,7 +1762,16 @@ run(void)
 	while (running) {
 		while (XPending(dpy)) {
 			XNextEvent(dpy, &ev);
-			if (ev.type < LASTEvent && handler[ev.type])
+			if (rrbase >= 0
+			    && (ev.type == rrbase + RRScreenChangeNotify
+			        || ev.type == rrbase + RRNotify)) {
+				if (ev.type == rrbase + RRScreenChangeNotify)
+					XRRUpdateConfiguration(&ev);
+				sw = DisplayWidth(dpy, screen);
+				sh = DisplayHeight(dpy, screen);
+				updatemons();
+				focus(focused());
+			} else if (ev.type < LASTEvent && handler[ev.type])
 				handler[ev.type](&ev);
 			if (!running)
 				return;

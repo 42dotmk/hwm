@@ -3,7 +3,7 @@
 CC      = cc
 CFLAGS  = -std=c99 -pedantic -Wall -Wextra -Os -D_POSIX_C_SOURCE=200809L \
           -isystem vendor
-LDLIBS  = -lX11
+LDLIBS  = -lX11 -lXrandr
 BINDIR  = $(HOME)/.local/bin
 
 all: hwm

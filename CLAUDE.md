@@ -26,6 +26,8 @@ Three files: `hwm.c` (the entire WM), `config.c` (user configuration), `hwm.h` (
 
 Data model (all stb_ds arrays): `Workspace` → `cols` (Columns, left→right) + `floats`; `Column` → `clients` (top→bottom). Windows live in columns on an infinite horizontal strip; the screen is a viewport with per-workspace `scroll` offset. Opening a window never resizes others — each new window gets its own column. `arrangews()` is the single layout function: it recomputes all geometry for one workspace from this model.
 
+Monitors (`mons`, from XRandR via `updatemons()`, sorted left→right): each `Workspace` has a `mon`, each `Monitor` shows one workspace (`ws`). The active monitor is the one under the pointer — `syncactivemon()` re-targets `curws` on every key/button press, and cross-monitor `view`/`movewsmon` (Mod+comma/period) warp the pointer to keep that model consistent. Attach: a new monitor takes over the first hidden workspace. Detach: its workspaces move to the active monitor. hwm only *reads* the arrangement; enabling an output is done with the `xrandr` CLI.
+
 Non-obvious mechanics:
 
 - **Hidden workspaces are not unmapped** — `arrangews()` parks them offscreen at `x - 3*sw`. Unmapping would generate UnmapNotify events indistinguishable from windows closing themselves (`unmapnotify()` → `unmanage()`).

@@ -36,6 +36,7 @@ static const char *filescmd[]   = { "thunar", NULL };
 static const char *tmuxcmd[]    = { "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL };
 static const char *mailcmd[] 	= { "hterm", "-e", "hed", "-c", "mail", NULL };
 static const char *calcmd[] 	= { "firefox", "https://calendar.google.com", NULL };
+static const char *traycmd[] 	= { "pkill", "-USR1", "-x", "htray", NULL };
 /* special keys (bound with no modifier, like niri's defaults) */
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };
@@ -59,6 +60,7 @@ static const Key basekeys[] = {
 	{ MODKEY|ShiftMask,    XK_Return,      spawn,       { .v = tmuxcmd } },
 	{ MODKEY,    		   XK_m,           spawn,       { .v = mailcmd} },
 	{ MODKEY,    		   XK_c,           spawn,       { .v = calcmd} },
+	{ MODKEY,    		   XK_z,           spawn,       { .v = traycmd} },
 	{ MODKEY,              XK_q,           killclient,  {0} },
 	{ MODKEY|ShiftMask,    XK_e,           quit,        {0} },
 	{ MODKEY|ShiftMask,    XK_r,           restart,     {0} },
@@ -113,11 +115,10 @@ static const Button basebuttons[] = {
 static const char *autostartcmds[] = {
 	"xsetroot -solid '#1a1b26'", /* instant fallback while feh loads */
 	"feh --no-fehbg --bg-fill --randomize ~/pictures/backgrounds/preffered",
-	"setxkbmap -layout us,mk -option '' "
-	"-option caps:escape -option shift:both_capslock "
-	"-option grp:lalt_lshift_toggle",
-	/* spawns wireplumber + pulse server via /etc/pipewire/pipewire.conf.d */
-	"pgrep -x pipewire >/dev/null || pipewire",
+	"setxkbmap -layout us,mk -option '' -option caps:escape -option shift:both_capslock -option grp:lalt_lshift_toggle",
+	"pipewire",
+	"htray",
+	"nm-applet",
 };
 
 #define COUNT(X) (sizeof(X) / sizeof((X)[0]))

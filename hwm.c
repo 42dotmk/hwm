@@ -797,6 +797,32 @@ movehorz(const Arg *arg)
 	focus(c);
 }
 
+/* consume: stack the focused window into the adjacent column */
+void
+stackto(const Arg *arg)
+{
+	Workspace *ws = curwsp();
+	Client *c = focused();
+	Column *col;
+	ptrdiff_t i, j;
+
+	if (!c || c->isfloating)
+		return;
+	i = colidx(ws, c->col) + (arg->i > 0 ? 1 : -1);
+	if (i < 0 || i >= arrlen(ws->cols) || ws->cols[i] == c->col)
+		return;
+	col = ws->cols[i]; /* before detach: it may free c's column */
+	detach(c);
+	j = col->sel ? clientidx(col, col->sel) + 1 : arrlen(col->clients);
+	arrins(col->clients, j, c);
+	col->sel = c;
+	c->col = col;
+	ws->selcol = col;
+	ensurevisible(col);
+	arrangews(curws);
+	focus(c);
+}
+
 void
 movevert(const Arg *arg)
 {

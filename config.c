@@ -83,6 +83,11 @@ static const Key basekeys[] = {
 	{ MODKEY|ShiftMask,    XK_Up,          movevert,    { .i = -1 } },
 	{ MODKEY|ShiftMask,    XK_Down,        movevert,    { .i = +1 } },
 
+	{ MODKEY|ControlMask,  XK_h,           stackto,     { .i = -1 } },
+	{ MODKEY|ControlMask,  XK_l,           stackto,     { .i = +1 } },
+	{ MODKEY|ControlMask,  XK_Left,        stackto,     { .i = -1 } },
+	{ MODKEY|ControlMask,  XK_Right,       stackto,     { .i = +1 } },
+
 	{ MODKEY,              XK_r,           cyclewidth,  {0} },
 	{ MODKEY,              XK_minus,       growwidth,   { .f = -0.05f } },
 	{ MODKEY,              XK_equal,       growwidth,   { .f = +0.05f } },

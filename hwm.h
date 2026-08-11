@@ -29,6 +29,7 @@ typedef struct {
 void focushorz(const Arg *arg);   /* .i = -1 left / +1 right (columns) */
 void focusvert(const Arg *arg);   /* .i = -1 up / +1 down (within column) */
 void movehorz(const Arg *arg);    /* move window/column left or right */
+void stackto(const Arg *arg);     /* stack window into the adjacent column */
 void movevert(const Arg *arg);    /* move window up or down in its column */
 void cyclewidth(const Arg *arg);  /* cycle column width through widths[] */
 void growwidth(const Arg *arg);   /* .f = width delta, fraction of screen */

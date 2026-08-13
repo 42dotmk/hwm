@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <X11/Xlib.h>
 
+#define LENGTH(X) (sizeof(X) / sizeof((X)[0]))
+
 typedef union {
 	int i;
 	float f;
@@ -33,6 +35,7 @@ void stackto(const Arg *arg);     /* stack window into the adjacent column */
 void movevert(const Arg *arg);    /* move window up or down in its column */
 void cyclewidth(const Arg *arg);  /* cycle column width through widths[] */
 void growwidth(const Arg *arg);   /* .f = width delta, fraction of screen */
+void setwidth(const Arg *arg);    /* .f = column width, fraction of screen */
 void scrollby(const Arg *arg);    /* .f = scroll delta, fraction of screen */
 void togglefull(const Arg *arg);  /* fullscreen the focused column */
 void togglefloat(const Arg *arg); /* float/tile the focused window */
@@ -46,26 +49,22 @@ void restart(const Arg *arg);     /* exec ourselves; picks up a rebuilt binary *
 void dragscroll(const Arg *arg);  /* mouse: drag the strip */
 void dragwidth(const Arg *arg);   /* mouse: resize the focused column */
 
-/* configuration, defined in config.c; the arrays are stb_ds arrays built
- * by initconfig(), which must run before setup() */
+/* configuration, defined in config.c; the pointers are stb_ds arrays built
+ * by initconfig(), which must run before setup(); length via arrlen() */
 void initconfig(void);
 extern const unsigned int borderpx;
-extern const unsigned int padding;
-extern const unsigned int margin;
+extern const unsigned int gappx;
 extern const char col_focus[];
 extern const char col_unfocus[];
 extern const int focusfollowsmouse;
 extern const char wsindfont[];      /* core X font for the workspace indicator */
 extern const unsigned int wsindms;  /* indicator display time in ms; 0 disables */
+extern const unsigned int scrollanimms; /* scroll animation duration in ms; 0 disables */
 extern const float defwidth;
 extern float *widths;
-extern size_t nwidths;
 extern const size_t nworkspaces;
 extern Key *keys;
-extern size_t nkeys;
 extern Button *buttons;
-extern size_t nbuttons;
 extern const char **autostart;   /* sh -c commands run on start and reload */
-extern size_t nautostart;
 
 #endif

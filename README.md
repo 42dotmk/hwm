@@ -14,8 +14,8 @@ of the focused one. A column can hold several windows stacked vertically
 (move a window into position with Mod+Shift+direction). There are 9
 independent workspaces, each with its own strip.
 
-`padding` is the gap between windows and the screen edge; `margin` is the
-gap between windows and columns. Both are set in `config.c`.
+Gaps are decoration, not layout: columns and cells tile edge to edge, and
+every window is simply inset by `gappx` inside its cell (set in `config.c`).
 
 Not everything tiles: dialogs, notifications, splash screens, utility and
 menu windows, transient windows, and fixed-size windows float above the
@@ -46,6 +46,7 @@ nested server:
 |----------------------------|--------------------------------------------|
 | Mod+Return                 | spawn terminal                             |
 | Mod+Space                  | app launcher (rofi)                        |
+| Mod+Tab                    | workspace/window overview (hws)            |
 | Mod+q                      | close window                               |
 | Mod+Shift+e                | quit hwm                                   |
 | Mod+Shift+r                | restart hwm in place                       |
@@ -53,7 +54,9 @@ nested server:
 | Mod+j/k                    | focus window down/up within the column     |
 | Mod+Shift+h/l              | move window: alone → swap columns; stacked → split into its own column |
 | Mod+Shift+j/k              | move window down/up within the column      |
+| Mod+Ctrl+h/l               | stack window into the adjacent column      |
 | Mod+r                      | cycle column width (1/3, 1/2, 2/3, 1)      |
+| Mod+Ctrl+1..4              | set column width to the Nth preset         |
 | Mod+minus / Mod+equal      | shrink / grow column width                 |
 | Mod+f                      | toggle fullscreen                          |
 | Mod+Shift+Space            | toggle floating for the focused window     |
@@ -67,7 +70,7 @@ nested server:
 
 ## Configuration
 
-Everything lives in `config.c`: colors, border width, padding, margin,
+Everything lives in `config.c`: colors, border width, gap size,
 width presets, workspace count, keys, mouse buttons, and autostart
 commands. Edit and `make`. The key, button, width, and autostart tables
 are stb_ds arrays assembled in `initconfig()`, so bindings can also be

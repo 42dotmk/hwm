@@ -9,13 +9,13 @@
 
 /* appearance */
 const unsigned int borderpx = 2;          /* window border width in px */
-const unsigned int padding  = 12;         /* gap between windows and screen edge */
-const unsigned int margin   = 8;          /* gap between windows and columns */
+const unsigned int gappx    = 6;          /* decoration: empty space around every window */
 const char col_focus[]      = "#7aa2f7";  /* focused border color */
 const char col_unfocus[]    = "#3b4261";  /* unfocused border color */
 const int focusfollowsmouse = 0;
 const char wsindfont[]      = "10x20";    /* workspace indicator font ("fixed" as fallback) */
 const unsigned int wsindms  = 750;        /* workspace indicator display time in ms; 0 disables */
+const unsigned int scrollanimms = 200;    /* scroll animation duration in ms; 0 disables */
 
 /* layout */
 const float defwidth  = 0.5f;             /* width of new columns, fraction of screen */
@@ -26,17 +26,17 @@ float *widths;
 Key *keys;
 Button *buttons;
 const char **autostart;
-size_t nwidths, nkeys, nbuttons, nautostart;
 
 static const char *termcmd[]    = { "hterm", NULL };
 static const char *menucmd[]    = { "rofi", "-combi-modes", "window,drun,run,ssh", "-modes", "combi", "-show", "combi", NULL };
 static const char *wincmd[]     = { "rofi", "-show", "window", NULL };
+static const char *switchercmd[] = { "hws", NULL };
 static const char *browsercmd[] = { "firefox", NULL };
 static const char *filescmd[]   = { "thunar", NULL };
 static const char *tmuxcmd[]    = { "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL };
-static const char *mailcmd[] 	= { "hterm", "-e", "hed", "-c", "mail", NULL };
-static const char *calcmd[] 	= { "firefox", "https://calendar.google.com", NULL };
-static const char *traycmd[] 	= { "pkill", "-USR1", "-x", "htray", NULL };
+static const char *mailcmd[]    = { "hterm", "-e", "hed", "-c", "mail", NULL };
+static const char *calcmd[]     = { "firefox", "https://calendar.google.com", NULL };
+static const char *traycmd[]    = { "pkill", "-USR1", "-x", "htray", NULL };
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };
 static const char *mutecmd[]    = { "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL };
@@ -47,18 +47,18 @@ static const char *playcmd[]    = { "playerctl", "play-pause", NULL };
 static const char *nextcmd[]    = { "playerctl", "next", NULL };
 static const char *prevcmd[]    = { "playerctl", "previous", NULL };
 
-
 static const Key basekeys[] = {
 	/* modifier            key             function     argument */
 	{ MODKEY,              XK_Return,      spawn,       { .v = termcmd } },
 	{ MODKEY,              XK_space,       spawn,       { .v = menucmd } },
 	{ MODKEY,              XK_o,           spawn,       { .v = wincmd } },
+	{ MODKEY,              XK_Tab,         spawn,       { .v = switchercmd } },
 	{ MODKEY,              XK_b,           spawn,       { .v = browsercmd } },
 	{ MODKEY,              XK_e,           spawn,       { .v = filescmd } },
 	{ MODKEY|ShiftMask,    XK_Return,      spawn,       { .v = tmuxcmd } },
-	{ MODKEY,    		   XK_m,           spawn,       { .v = mailcmd} },
-	{ MODKEY,    		   XK_c,           spawn,       { .v = calcmd} },
-	{ MODKEY,    		   XK_z,           spawn,       { .v = traycmd} },
+	{ MODKEY,              XK_m,           spawn,       { .v = mailcmd } },
+	{ MODKEY,              XK_c,           spawn,       { .v = calcmd } },
+	{ MODKEY,              XK_z,           spawn,       { .v = traycmd } },
 	{ MODKEY,              XK_q,           killclient,  {0} },
 	{ MODKEY|ShiftMask,    XK_e,           quit,        {0} },
 	{ MODKEY|ShiftMask,    XK_r,           restart,     {0} },
@@ -67,24 +67,17 @@ static const Key basekeys[] = {
 	{ MODKEY,              XK_l,           focushorz,   { .i = +1 } },
 	{ MODKEY,              XK_k,           focusvert,   { .i = -1 } },
 	{ MODKEY,              XK_j,           focusvert,   { .i = +1 } },
-	{ MODKEY,              XK_Left,        focushorz,   { .i = -1 } },
-	{ MODKEY,              XK_Right,       focushorz,   { .i = +1 } },
-	{ MODKEY,              XK_Up,          focusvert,   { .i = -1 } },
-	{ MODKEY,              XK_Down,        focusvert,   { .i = +1 } },
+
 
 	{ MODKEY|ShiftMask,    XK_h,           movehorz,    { .i = -1 } },
 	{ MODKEY|ShiftMask,    XK_l,           movehorz,    { .i = +1 } },
 	{ MODKEY|ShiftMask,    XK_k,           movevert,    { .i = -1 } },
 	{ MODKEY|ShiftMask,    XK_j,           movevert,    { .i = +1 } },
-	{ MODKEY|ShiftMask,    XK_Left,        movehorz,    { .i = -1 } },
-	{ MODKEY|ShiftMask,    XK_Right,       movehorz,    { .i = +1 } },
-	{ MODKEY|ShiftMask,    XK_Up,          movevert,    { .i = -1 } },
-	{ MODKEY|ShiftMask,    XK_Down,        movevert,    { .i = +1 } },
+
 
 	{ MODKEY|ControlMask,  XK_h,           stackto,     { .i = -1 } },
 	{ MODKEY|ControlMask,  XK_l,           stackto,     { .i = +1 } },
-	{ MODKEY|ControlMask,  XK_Left,        stackto,     { .i = -1 } },
-	{ MODKEY|ControlMask,  XK_Right,       stackto,     { .i = +1 } },
+
 
 	{ MODKEY,              XK_r,           cyclewidth,  {0} },
 	{ MODKEY,              XK_minus,       growwidth,   { .f = -0.05f } },
@@ -126,31 +119,29 @@ static const char *autostartcmds[] = {
 	"nm-applet",
 };
 
-#define COUNT(X) (sizeof(X) / sizeof((X)[0]))
 static const float widthpresets[] = { 1.0f/3.0f, 0.5f, 2.0f/3.0f, 1.0f }; /* cyclewidth */
+#define SETARR(vals, arr) do { size_t i; for (i = 0; i < LENGTH(vals); i++) arrput(arr, vals[i]); } while (0)
+/* one binding per element of vals: mod + (key + i) -> fn(arg), with i usable in arg */
+#define SETKEYS(vals, mod, key, fn, ...) do { size_t i; for (i = 0; i < LENGTH(vals); i++) \
+	arrput(keys, ((Key){ (mod), (key) + i, fn, __VA_ARGS__ })); } while (0)
+
 void
 initconfig(void)
 {
 	size_t i;
 
-	for (i = 0; i < COUNT(widthpresets); i++)
-		arrput(widths, widthpresets[i]);
-	for (i = 0; i < COUNT(basekeys); i++)
-		arrput(keys, basekeys[i]);
+	SETARR(widthpresets, widths);
+	SETARR(basekeys, keys);
+	SETARR(basebuttons, buttons);
+	SETARR(autostartcmds, autostart);
+	/* Mod+Ctrl+N sets the column width to the Nth preset
+	 * (not Mod+Shift+N: that already sends the window to workspace N) */
+	SETKEYS(widthpresets, MODKEY|ControlMask, XK_1, setwidth,
+	        { .f = widthpresets[i] });
 	/* Mod+N views workspace N, Mod+Shift+N sends the focused window there */
-	for (i = 0; i < nworkspaces ; i++) {
-		arrput(keys, ((Key){ MODKEY, XK_0 + i,
-		                     view, { .i = (int)i } }));
-		                     
-		arrput(keys, ((Key){ MODKEY|ShiftMask, XK_0 + i,
-		                     sendto, { .i = (int)i } }));
+	for (i = 0; i < nworkspaces; i++) {
+		arrput(keys, ((Key){ MODKEY, XK_0 + i, view, { .i = (int)i } }));
+		arrput(keys, ((Key){ MODKEY|ShiftMask, XK_0 + i, sendto, { .i = (int)i } }));
 	}
-	for (i = 0; i < COUNT(basebuttons); i++)
-		arrput(buttons, basebuttons[i]);
-	for (i = 0; i < COUNT(autostartcmds); i++)
-		arrput(autostart, autostartcmds[i]);
-	nwidths = (size_t)arrlen(widths);
-	nkeys = (size_t)arrlen(keys);
-	nbuttons = (size_t)arrlen(buttons);
-	nautostart = (size_t)arrlen(autostart);
 }
+

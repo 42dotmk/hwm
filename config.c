@@ -19,6 +19,8 @@ const unsigned int scrollanimms = 200;    /* scroll animation duration in ms; 0 
 
 /* layout */
 const float defwidth  = 0.5f;             /* width of new columns, fraction of screen */
+const float floatsize = 0.6f;             /* size of newly floated windows, fraction of monitor */
+const float gesturescale = 3.0f;          /* three-finger swipe: scroll px per touchpad px */
 const size_t nworkspaces = 10;
 
 /* stb_ds arrays, built by initconfig() */
@@ -35,8 +37,10 @@ static const char *browsercmd[] = { "firefox", NULL };
 static const char *filescmd[]   = { "thunar", NULL };
 static const char *tmuxcmd[]    = { "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL };
 static const char *mailcmd[]    = { "hterm", "-e", "hed", "-c", "mail", NULL };
+static const char *todocmd[]    = { "hterm", "-e", "hed", "/home/halicea/org/todo.md", NULL };
 static const char *calcmd[]     = { "firefox", "https://calendar.google.com", NULL };
 static const char *traycmd[]    = { "pkill", "-USR1", "-x", "htray", NULL };
+static const char *trayinputcmd[] = { "pkill", "-USR2", "-x", "htray", NULL };
 static const char *volupcmd[]   = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL };
 static const char *voldowncmd[] = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL };
 static const char *mutecmd[]    = { "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL };
@@ -58,7 +62,9 @@ static const Key basekeys[] = {
 	{ MODKEY|ShiftMask,    XK_Return,      spawn,       { .v = tmuxcmd } },
 	{ MODKEY,              XK_m,           spawn,       { .v = mailcmd } },
 	{ MODKEY,              XK_c,           spawn,       { .v = calcmd } },
+	{ MODKEY,              XK_t,           spawn,       { .v = todocmd } },
 	{ MODKEY,              XK_z,           spawn,       { .v = traycmd } },
+	{ MODKEY|ShiftMask,    XK_z,           spawn,       { .v = trayinputcmd } },
 	{ MODKEY,              XK_q,           killclient,  {0} },
 	{ MODKEY|ShiftMask,    XK_e,           quit,        {0} },
 	{ MODKEY|ShiftMask,    XK_r,           restart,     {0} },

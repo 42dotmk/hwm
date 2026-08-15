@@ -7,6 +7,9 @@
 #include <X11/extensions/Xrandr.h>
 #include <X11/keysym.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <libinput.h>
+#include <libudev.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
@@ -100,6 +103,9 @@ static int dorestart;
 static char selfpath[PATH_MAX];
 static struct stat selfstat;
 static int selfok;
+static struct libinput *li; /* NULL: touchpad gestures unavailable */
+static int swiping;         /* a three-finger swipe is in flight */
+static float swipex;        /* the scroll position it is tracking */
 /* interned in setup() from atomnames[]; keep both lists in step.
  * Two ranges matter: NetSupported..NetWMWindowType is advertised as
  * _NET_SUPPORTED, and windows of type NetTypeDialog..NetTypeNotification
@@ -304,6 +310,35 @@ static void ensurevisible(Column *col) {
   clampscroll(ws);
 }
 
+/* glide to the nearest column edge aligned with a screen edge */
+static void snapscroll(Workspace *ws) {
+  ptrdiff_t i;
+  int mw = wsmon((size_t)(ws - wss))->w;
+  int vx = 0, cw, cand, d, best = ws->scroll, bd = INT_MAX;
+
+  if (!arrlen(ws->cols))
+    return;
+  beginscroll(ws);
+  for (i = 0; i < arrlen(ws->cols); i++) {
+    cw = colpx(ws->cols[i]);
+    cand = vx; /* column's left edge at the left of the screen */
+    d = abs(cand - ws->scroll);
+    if (d < bd) {
+      bd = d;
+      best = cand;
+    }
+    cand = vx + cw - mw; /* right edge at the right of the screen */
+    d = abs(cand - ws->scroll);
+    if (d < bd) {
+      bd = d;
+      best = cand;
+    }
+    vx += cw;
+  }
+  ws->scroll = best;
+  clampscroll(ws);
+}
+
 static Client *findclient(Window w) {
   ptrdiff_t i;
 
@@ -361,6 +396,14 @@ static void arrangews(size_t wi) {
                       (unsigned int)c->h);
     XRaiseWindow(dpy, c->win);
   }
+}
+
+/* 1:1 scroll tracking, shared by pointer drags and touchpad swipes */
+static void trackscroll(Workspace *ws, int target) {
+  ws->animating = 0;
+  ws->scroll = target;
+  clampscroll(ws);
+  arrangews((size_t)(ws - wss));
 }
 
 static void setcardinal(Window w, Atom prop, long value) {
@@ -974,6 +1017,7 @@ void togglefull(const Arg *arg) {
 
 void togglefloat(const Arg *arg) {
   Workspace *ws = curwsp();
+  Monitor *m = wsmon(curws);
   Client *c = focused();
 
   (void)arg;
@@ -986,7 +1030,10 @@ void togglefloat(const Arg *arg) {
   } else {
     detach(c);
     c->isfloating = 1;
-    /* floats in place, keeping the geometry it had in the strip */
+    c->w = (int)((float)m->w * floatsize);
+    c->h = (int)((float)m->h * floatsize);
+    c->x = m->x + (m->w - c->w) / 2 - (int)borderpx;
+    c->y = m->y + (m->h - c->h) / 2 - (int)borderpx;
     arrput(ws->floats, c);
   }
   arrangews(curws);
@@ -1150,8 +1197,7 @@ static void drag(int mode) {
         resizeclient(c, x, y, MAX(50, w + dx), MAX(50, h + dy));
         break;
       case DragScroll:
-        ws->scroll = scroll - dx;
-        arrangews(curws);
+        trackscroll(ws, scroll - dx);
         break;
       case DragWidth:
         setcolwidth(col, width + (float)dx / (float)wsmon(col->ws)->w);
@@ -1511,6 +1557,77 @@ static int samefile(const struct stat *a, const struct stat *b) {
 
 /* restart once our binary has been replaced and has stopped changing:
  * the linker unlinks and rewrites it, so wait for two identical polls */
+/* three-finger swipes scroll the strip like a pointer drag. The X server
+ * forwards no touchpad gestures, so they are read from libinput itself;
+ * that needs read access to /dev/input (the input group) */
+static int openrestricted(const char *path, int flags, void *data) {
+  (void)data;
+  return open(path, flags | O_CLOEXEC); /* don't leak fds across restart */
+}
+
+static void closerestricted(int fd, void *data) {
+  (void)data;
+  close(fd);
+}
+
+static const struct libinput_interface gestureiface = {
+  .open_restricted = openrestricted,
+  .close_restricted = closerestricted,
+};
+
+static void initgestures(void) {
+  struct udev *udev = udev_new();
+
+  if (!udev)
+    return;
+  li = libinput_udev_create_context(&gestureiface, NULL, udev);
+  udev_unref(udev); /* the context keeps its own reference */
+  if (li && libinput_udev_assign_seat(li, "seat0") < 0) {
+    libinput_unref(li);
+    li = NULL;
+  }
+  if (!li)
+    fprintf(stderr, "hwm: no touchpad gestures (libinput unavailable)\n");
+}
+
+static void gestureevents(void) {
+  struct libinput_event *ev;
+  struct libinput_event_gesture *ge;
+  Workspace *ws;
+
+  libinput_dispatch(li);
+  while ((ev = libinput_get_event(li)) != NULL) {
+    ge = libinput_event_get_gesture_event(ev);
+    switch (libinput_event_get_type(ev)) {
+    case LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN:
+      if (libinput_event_gesture_get_finger_count(ge) != 3)
+        break;
+      syncactivemon(); /* the gesture acts where the pointer is */
+      swipex = (float)curwsp()->scroll;
+      swiping = 1;
+      break;
+    case LIBINPUT_EVENT_GESTURE_SWIPE_UPDATE:
+      if (!swiping)
+        break;
+      ws = curwsp();
+      swipex -= (float)libinput_event_gesture_get_dx(ge) * gesturescale;
+      trackscroll(ws, (int)swipex);
+      swipex = (float)ws->scroll; /* don't wind up past the ends */
+      break;
+    case LIBINPUT_EVENT_GESTURE_SWIPE_END:
+      if (!swiping)
+        break;
+      swiping = 0;
+      snapscroll(curwsp());
+      arrangews(curws);
+      break;
+    default:
+      break;
+    }
+    libinput_event_destroy(ev);
+  }
+}
+
 static void checkself(void) {
   static struct timespec last;
   static struct stat prev;
@@ -1562,6 +1679,7 @@ static void run(void) {
   struct timeval tv;
   long ms, timeout;
   int xfd = ConnectionNumber(dpy);
+  int gfd = li ? libinput_get_fd(li) : -1;
 
   while (running) {
     while (XPending(dpy)) {
@@ -1581,6 +1699,8 @@ static void run(void) {
     }
     FD_ZERO(&fds);
     FD_SET(xfd, &fds);
+    if (gfd >= 0)
+      FD_SET(gfd, &fds);
     timeout = 1000;
     if (animstep()) {
       XFlush(dpy);
@@ -1596,10 +1716,14 @@ static void run(void) {
     }
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout % 1000) * 1000;
-    if (select(xfd + 1, &fds, NULL, NULL, &tv) < 0) {
+    if (select(MAX(xfd, gfd) + 1, &fds, NULL, NULL, &tv) < 0) {
       if (errno == EINTR)
         continue;
       die("hwm: select failed");
+    }
+    if (gfd >= 0 && FD_ISSET(gfd, &fds)) {
+      gestureevents();
+      XFlush(dpy);
     }
     if (!FD_ISSET(xfd, &fds))
       checkself();
@@ -1610,10 +1734,13 @@ int main(int argc, char *argv[]) {
   (void)argc;
   initconfig();
   setup();
+  initgestures();
   initselfwatch(argv[0]);
   scan();
   autostartrun();
   run();
+  if (li)
+    libinput_unref(li);
   XCloseDisplay(dpy);
   if (dorestart) {
     if (selfpath[0])

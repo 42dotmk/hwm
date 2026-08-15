@@ -61,6 +61,8 @@ extern const char wsindfont[];      /* core X font for the workspace indicator *
 extern const unsigned int wsindms;  /* indicator display time in ms; 0 disables */
 extern const unsigned int scrollanimms; /* scroll animation duration in ms; 0 disables */
 extern const float defwidth;
+extern const float floatsize; /* size of newly floated windows, fraction of monitor */
+extern const float gesturescale; /* three-finger swipe: scroll px per touchpad px */
 extern float *widths;
 extern const size_t nworkspaces;
 extern Key *keys;

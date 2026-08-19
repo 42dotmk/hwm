@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-hwm is a scrollable-column tiling window manager for X11 in the suckless style: niri's layout model, dwm's construction. C99, Xlib is the only dependency, configured by editing `config.c` and recompiling. No decorations except borders, no bars.
+hwm is a scrollable-column tiling window manager for X11 in the suckless style: niri's layout model, dwm's construction. C11, Xlib is the only dependency, configured by editing `config.h` and recompiling. No decorations except borders, no bars.
 
 ## Build and run
 
-- `make` — builds `hwm`. Strict flags (`-std=c99 -pedantic -Wall -Wextra`); keep the build warning-free.
+- `make` — builds `hwm`. Strict flags (`-std=c11 -pedantic -Wall -Wextra`); keep the build warning-free.
 - `make install` — symlinks the binary into `~/.local/bin` (no sudo; the symlink means a rebuild is enough).
 - There is no test suite or linter. Verify changes by running under a nested X server:
 
@@ -22,7 +22,7 @@ hwm is a scrollable-column tiling window manager for X11 in the suckless style: 
 
 ## Architecture
 
-Three files: `hwm.c` (the entire WM), `config.c` (user configuration), `hwm.h` (shared types, bindable command declarations, config externs). `vendor/stb_ds.h` supplies dynamic arrays (`arrput`/`arrdel`/`arrlen`); its implementation is compiled into `hwm.c` with `erealloc` as allocator.
+Three files: `hwm.c` (the entire WM), `config.h` (user configuration, included by `hwm.c` — one translation unit), `hwm.h` (shared types, bindable command declarations, config declarations). `vendor/stb_ds.h` supplies dynamic arrays (`arrput`/`arrdel`/`arrlen`); its implementation is compiled into `hwm.c` with `erealloc` as allocator.
 
 Data model (all stb_ds arrays): `Workspace` → `cols` (Columns, left→right) + `floats`; `Column` → `clients` (top→bottom). Windows live in columns on an infinite horizontal strip; the screen is a viewport with per-workspace `scroll` offset. Opening a window never resizes others — each new window gets its own column. `arrangews()` is the single layout function: it recomputes all geometry for one workspace from this model.
 
@@ -37,8 +37,8 @@ Non-obvious mechanics:
 - **X errors** from vanished windows are deliberately swallowed in `xerror()`, dwm-style.
 - Just enough EWMH is advertised for rofi/pagers: `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW`, `_NET_CURRENT_DESKTOP`, `_NET_WM_DESKTOP`.
 
-Adding a user-facing command: implement `void name(const Arg *arg)` in `hwm.c`, declare it in `hwm.h` with a one-line comment, bind it in `config.c`. The key/button/width/autostart tables are stb_ds arrays assembled in `initconfig()` (which must run before `setup()`), so bindings can be generated in loops — the per-workspace keys are.
+Adding a user-facing command: implement `void name(const Arg *arg)` in `hwm.c`, declare it in `hwm.h` with a one-line comment, bind it in `config.h`. The key/button/width/autostart tables are stb_ds arrays assembled in `initconfig()` (which must run before `setup()`), so bindings can be generated in loops — the per-workspace keys are.
 
 ## Style
 
-dwm-style C99: tabs, K&R braces, short lowercase function names, forward declarations and the `handler[]` event-function table at the top of `hwm.c`, `/* comments */` only where the code can't say it. Config values are `const` globals in `config.c` declared `extern` in `hwm.h`.
+dwm-style C11: tabs, K&R braces, short lowercase function names, forward declarations and the `handler[]` event-function table at the top of `hwm.c`, `/* comments */` only where the code can't say it. Config values are `const` globals defined in `config.h` and declared in `hwm.h`.

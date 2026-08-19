@@ -6,21 +6,15 @@ CC      = cc
 # the exact tag/commit it was built from; "dev" without git metadata.
 VERSION != git describe --tags --always --dirty 2>/dev/null || echo dev
 
-CFLAGS  = -std=c99 -pedantic -Wall -Wextra -Os -D_POSIX_C_SOURCE=200809L \
+CFLAGS  = -std=c11 -pedantic -Wall -Wextra -Os -D_POSIX_C_SOURCE=200809L \
           -DHWM_VERSION='"$(VERSION)"' -isystem vendor
 LDLIBS  = -lX11 -lXrandr -linput -ludev
 BINDIR  = $(HOME)/.local/bin
 
 all: hwm
 
-hwm: hwm.o config.o
-	$(CC) -o $@ hwm.o config.o $(LDLIBS)
-
-hwm.o: hwm.c hwm.h vendor/stb_ds.h
-	$(CC) $(CFLAGS) -c hwm.c
-
-config.o: config.c hwm.h vendor/stb_ds.h
-	$(CC) $(CFLAGS) -c config.c
+hwm: hwm.c hwm.h config.h vendor/stb_ds.h
+	$(CC) $(CFLAGS) -o $@ hwm.c $(LDLIBS)
 
 install: hwm
 	mkdir -p $(BINDIR)
@@ -30,6 +24,6 @@ uninstall:
 	rm -f $(BINDIR)/hwm
 
 clean:
-	rm -f hwm hwm.o config.o
+	rm -f hwm
 
 .PHONY: all install uninstall clean

@@ -1,3 +1,4 @@
+#include <X11/XF86keysym.h>
 #include <X11/XKBlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
@@ -29,6 +30,8 @@ static void *erealloc(void *ptr, size_t size);
 #define STBDS_FREE(ctx, ptr) free(ptr)
 #define STB_DS_IMPLEMENTATION
 #include <stb_ds.h>
+
+#include "config.h"
 
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define MOUSEMASK (ButtonPressMask | ButtonReleaseMask | PointerMotionMask)

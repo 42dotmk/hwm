@@ -1,8 +1,8 @@
 # hwm
 
 A scrollable-column tiling window manager for X11, in the suckless style.
-Niri's layout model, dwm's construction: ~900 lines of C99, Xlib as the only
-dependency, configured by editing `config.c` and recompiling. No decorations
+Niri's layout model, dwm's construction: ~900 lines of C11, Xlib as the only
+dependency, configured by editing `config.h` and recompiling. No decorations
 except borders, no menus, no bars.
 
 ## Layout model
@@ -15,7 +15,7 @@ of the focused one. A column can hold several windows stacked vertically
 independent workspaces, each with its own strip.
 
 Gaps are decoration, not layout: columns and cells tile edge to edge, and
-every window is simply inset by `gappx` inside its cell (set in `config.c`).
+every window is simply inset by `gappx` inside its cell (set in `config.h`).
 
 Not everything tiles: dialogs, notifications, splash screens, utility and
 menu windows, transient windows, and fixed-size windows float above the
@@ -70,7 +70,7 @@ nested server:
 
 ## Configuration
 
-Everything lives in `config.c`: colors, border width, gap size,
+Everything lives in `config.h`: colors, border width, gap size,
 width presets, workspace count, keys, mouse buttons, and autostart
 commands. Edit and `make`. The key, button, width, and autostart tables
 are stb_ds arrays assembled in `initconfig()`, so bindings can also be
@@ -83,6 +83,6 @@ a restart — hwm re-adopts them on startup — but the arrangement resets:
 every window comes back in its own column on workspace 1. Mod+Shift+r
 forces a restart without a rebuild.
 
-`autostart` in `config.c` is a list of shell commands run when hwm starts,
+`autostart` in `config.h` is a list of shell commands run when hwm starts,
 including after every restart — keep them idempotent or guard them
 (e.g. `pgrep -x app || app`).

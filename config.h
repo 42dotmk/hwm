@@ -1,9 +1,6 @@
-/* hwm configuration. Edit, then rebuild with `make`. */
-#include <X11/keysym.h>
-#include <X11/XF86keysym.h>
-#include <stb_ds.h>
-
-#include "hwm.h"
+/* hwm configuration. Edit, then rebuild with `make`.
+ * Included by hwm.c after hwm.h, so the Key/Button types and the bindable
+ * command declarations are in scope. */
 
 #define MODKEY Mod4Mask /* Super */
 
@@ -148,4 +145,3 @@ initconfig(void)
 		arrput(keys, ((Key){ MODKEY|ShiftMask, XK_0 + i, sendto, { .i = (int)i } }));
 	}
 }
-

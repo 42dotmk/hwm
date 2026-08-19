@@ -1628,7 +1628,12 @@ static void run(void) {
 }
 
 int main(int argc, char *argv[]) {
-  (void)argc;
+  if (argc == 2 && !strcmp(argv[1], "-v")) {
+    printf("hwm %s\n", HWM_VERSION);
+    return 0;
+  }
+  if (argc > 1)
+    die("usage: hwm [-v]");
   initconfig();
   setup();
   initgestures();

@@ -2,6 +2,10 @@
 #ifndef HWM_H
 #define HWM_H
 
+#ifndef HWM_VERSION
+#define HWM_VERSION "dev"
+#endif
+
 #include <stddef.h>
 #include <X11/Xlib.h>
 

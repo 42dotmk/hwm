@@ -13,8 +13,6 @@ const unsigned int gappx    = 6;          /* decoration: empty space around ever
 const char col_focus[]      = "#7aa2f7";  /* focused border color */
 const char col_unfocus[]    = "#3b4261";  /* unfocused border color */
 const int focusfollowsmouse = 0;
-const char wsindfont[]      = "10x20";    /* workspace indicator font ("fixed" as fallback) */
-const unsigned int wsindms  = 750;        /* workspace indicator display time in ms; 0 disables */
 const unsigned int scrollanimms = 200;    /* scroll animation duration in ms; 0 disables */
 
 /* layout */
@@ -30,7 +28,7 @@ Button *buttons;
 const char **autostart;
 
 static const char *termcmd[]    = { "hterm", NULL };
-static const char *menucmd[]    = { "rofi", "-combi-modes", "window,drun,run,ssh", "-modes", "combi", "-show", "combi", NULL };
+static const char *menucmd[]    = { "hmenu", NULL };
 static const char *wincmd[]     = { "rofi", "-show", "window", NULL };
 static const char *switchercmd[] = { "hws", NULL };
 static const char *browsercmd[] = { "firefox", NULL };
@@ -117,12 +115,12 @@ static const Button basebuttons[] = {
 /* run with `sh -c` when hwm starts, including after a reload —
  * keep these idempotent or guard them (e.g. `pgrep x || x`) */
 static const char *autostartcmds[] = {
-	"xsetroot -solid '#1a1b26'", /* instant fallback while feh loads */
 	"feh --no-fehbg --bg-fill --randomize ~/pictures/backgrounds/preffered",
 	"setxkbmap -layout us,mk -option '' -option caps:escape -option shift:both_capslock -option grp:lalt_lshift_toggle",
+	"xset q | grep -q '.local/share/fonts' || { xset +fp $HOME/.local/share/fonts; xset fp rehash; }", /* user TTFs as core fonts (htray, hnd) */
 	"pipewire",
 	"htray",
-	"nm-applet",
+	"hnd",
 };
 
 static const float widthpresets[] = { 1.0f/3.0f, 0.5f, 2.0f/3.0f, 1.0f }; /* cyclewidth */

@@ -57,8 +57,6 @@ extern const unsigned int gappx;
 extern const char col_focus[];
 extern const char col_unfocus[];
 extern const int focusfollowsmouse;
-extern const char wsindfont[];      /* core X font for the workspace indicator */
-extern const unsigned int wsindms;  /* indicator display time in ms; 0 disables */
 extern const unsigned int scrollanimms; /* scroll animation duration in ms; 0 disables */
 extern const float defwidth;
 extern const float floatsize; /* size of newly floated windows, fraction of monitor */

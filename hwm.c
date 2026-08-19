@@ -81,7 +81,6 @@ static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static void destroynotify(XEvent *e);
 static void enternotify(XEvent *e);
-static void expose(XEvent *e);
 static void focusin(XEvent *e);
 static void keypress(XEvent *e);
 static void mappingnotify(XEvent *e);
@@ -152,12 +151,6 @@ static const char *atomnames[AtomLast] = {
 static Atom atoms[AtomLast];
 static Client *pressclient; /* client under the most recent button press */
 static Window checkwin;
-static Window indwin; /* workspace indicator popup, bottom right */
-static GC indgc;
-static XFontStruct *indfont;
-static int indw, indh;
-static int indshown;
-static struct timespec indhide; /* when to unmap the indicator */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 
 static void (*handler[LASTEvent])(XEvent *) = {
@@ -167,7 +160,6 @@ static void (*handler[LASTEvent])(XEvent *) = {
     [ConfigureRequest] = configurerequest,
     [DestroyNotify] = destroynotify,
     [EnterNotify] = enternotify,
-    [Expose] = expose,
     [FocusIn] = focusin,
     [KeyPress] = keypress,
     [MappingNotify] = mappingnotify,
@@ -776,84 +768,6 @@ static void updatemons(void) {
     arrangews(k);
 }
 
-/* workspace indicator: a small popup in the bottom-right corner showing the
- * workspace number, unmapped again wsindms after the last switch */
-
-static void drawindicator(void) {
-  char text[16];
-  int len, tw;
-
-  len = snprintf(text, sizeof text, "%zu", curws);
-  tw = XTextWidth(indfont, text, len);
-  XClearWindow(dpy, indwin);
-  XDrawString(dpy, indwin, indgc, (indw - tw) / 2,
-              (indh - indfont->ascent - indfont->descent) / 2 + indfont->ascent,
-              text, len);
-}
-
-static void hideindicator(void) {
-  XUnmapWindow(dpy, indwin);
-  indshown = 0;
-}
-
-static long indicatorms(void) {
-  struct timespec now;
-
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  return (indhide.tv_sec - now.tv_sec) * 1000 +
-         (indhide.tv_nsec - now.tv_nsec) / 1000000;
-}
-
-static void showindicator(void) {
-  XSetWindowAttributes swa;
-  Monitor *m;
-  char text[16];
-  int len, tw, pad;
-
-  if (!wsindms)
-    return;
-  if (!indfont) {
-    indfont = XLoadQueryFont(dpy, wsindfont);
-    if (!indfont)
-      indfont = XLoadQueryFont(dpy, "fixed");
-    if (!indfont)
-      return;
-  }
-  if (!indwin) {
-    swa.override_redirect = True;
-    swa.background_pixel = unfocuspx;
-    swa.border_pixel = focuspx;
-    swa.event_mask = ExposureMask;
-    indwin = XCreateWindow(
-        dpy, root, 0, 0, 1, 1, borderpx, CopyFromParent, CopyFromParent,
-        CopyFromParent,
-        CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask, &swa);
-    indgc = XCreateGC(dpy, indwin, 0, NULL);
-    XSetFont(dpy, indgc, indfont->fid);
-    XSetForeground(dpy, indgc, focuspx);
-  }
-  len = snprintf(text, sizeof text, "%zu", curws);
-  tw = XTextWidth(indfont, text, len);
-  pad = indfont->ascent + indfont->descent;
-  indh = 2 * pad;
-  indw = MAX(indh, tw + pad);
-  m = wsmon(curws);
-  XMoveResizeWindow(dpy, indwin,
-                    m->x + m->w - indw - 2 * (int)borderpx - (int)gappx,
-                    m->y + m->h - indh - 2 * (int)borderpx - (int)gappx,
-                    (unsigned int)indw, (unsigned int)indh);
-  XMapRaised(dpy, indwin);
-  drawindicator();
-  clock_gettime(CLOCK_MONOTONIC, &indhide);
-  indhide.tv_sec += wsindms / 1000;
-  indhide.tv_nsec += (long)(wsindms % 1000) * 1000000L;
-  if (indhide.tv_nsec >= 1000000000L) {
-    indhide.tv_sec++;
-    indhide.tv_nsec -= 1000000000L;
-  }
-  indshown = 1;
-}
-
 /* commands */
 
 void focushorz(const Arg *arg) {
@@ -1055,7 +969,6 @@ void view(const Arg *arg) {
   arrangews(curws);
   warptomon(m);
   focus(focused());
-  showindicator();
 }
 
 /* move the focused workspace to the adjacent monitor and follow it */
@@ -1090,7 +1003,6 @@ void movewsmon(const Arg *arg) {
   arrangews(curws);
   warptomon((size_t)nm);
   focus(focused());
-  showindicator();
 }
 
 void sendto(const Arg *arg) {
@@ -1341,13 +1253,6 @@ static void enternotify(XEvent *e) {
   c = findclient(ev->window);
   if (c && c != focused())
     focus(c);
-}
-
-static void expose(XEvent *e) {
-  XExposeEvent *ev = &e->xexpose;
-
-  if (indshown && ev->window == indwin && !ev->count)
-    drawindicator();
 }
 
 static void focusin(XEvent *e) {
@@ -1677,7 +1582,7 @@ static void run(void) {
   XEvent ev;
   fd_set fds;
   struct timeval tv;
-  long ms, timeout;
+  long timeout;
   int xfd = ConnectionNumber(dpy);
   int gfd = li ? libinput_get_fd(li) : -1;
 
@@ -1705,14 +1610,6 @@ static void run(void) {
     if (animstep()) {
       XFlush(dpy);
       timeout = 1000 / 60;
-    }
-    if (indshown) {
-      ms = indicatorms();
-      if (ms <= 0) {
-        hideindicator();
-        XFlush(dpy);
-      } else if (ms < timeout)
-        timeout = ms;
     }
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout % 1000) * 1000;

@@ -41,4 +41,4 @@ Adding a user-facing command: implement `void name(const Arg *arg)` in `hwm.c`, 
 
 ## Style
 
-dwm-style C11: tabs, K&R braces, short lowercase function names, forward declarations and the `handler[]` event-function table at the top of `hwm.c`, `/* comments */` only where the code can't say it. Config values are `const` globals defined in `config.h` and declared in `hwm.h`.
+dwm-style C11 formatted by clang-format via the repo's `.clang-format` (shared across the siblings: 4-space indent, attached braces, 80 columns — run `clang-format -i` on files you touch): short lowercase function names, forward declarations and the `handler[]` event-function table at the top of `hwm.c`, `/* comments */` only where the code can't say it. Config values are `const` globals defined in `config.h` and declared in `hwm.h`.

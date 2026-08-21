@@ -30,19 +30,27 @@ const char **autostart;
 static const char *termcmd[] = {"hterm", NULL};
 static const char *menucmd[] = {"hmenu", NULL};
 static const char *switchercmd[] = {"hws", NULL};
-static const char *tmuxcmd[] = {"hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL};
+static const char *tmuxcmd[] = {"hterm", "-e", "tmux", "new-session",
+                                "-A",    "-s", "main", NULL};
 static const char *mailcmd[] = {"hterm", "-e", "hed", "-c", "mail", NULL};
-static const char *todocmd[] = {"hterm", "-e", "hed", "/home/halicea/org/todo.md", NULL};
+static const char *todocmd[] = {"hterm", "-e", "hed",
+                                "/home/halicea/org/todo.md", NULL};
 static const char *browsercmd[] = {"firefox", NULL};
 static const char *filescmd[] = {"thunar", NULL};
-
+static const char *guidelinescmd[] = {
+    "sh", "-c",
+    "cd /home/halicea/projects/cc/cc-guidelines && exec hterm -e hed", NULL};
 static const char *calcmd[] = {"firefox", "https://calendar.google.com", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
-static const char *volupcmd[] = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
-static const char *voldowncmd[] = {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
-static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL};
-static const char *micmutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
+static const char *volupcmd[] = {
+    "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
+static const char *voldowncmd[] = {"wpctl", "set-volume",
+                                   "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
+static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@",
+                                "toggle", NULL};
+static const char *micmutecmd[] = {"wpctl", "set-mute",
+                                   "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
 static const char *briupcmd[] = {"brightnessctl", "set", "10%+", NULL};
 static const char *bridowncmd[] = {"brightnessctl", "set", "10%-", NULL};
 static const char *playcmd[] = {"playerctl", "play-pause", NULL};
@@ -60,6 +68,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_m, spawn, {.v = mailcmd}},
     {MODKEY, XK_c, spawn, {.v = calcmd}},
     {MODKEY, XK_t, spawn, {.v = todocmd}},
+    {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
     {MODKEY, XK_q, killclient, {0}},
@@ -119,7 +128,8 @@ static const char *autostartcmds[] = {
     "setxkbmap -layout us,mk -option '' -option caps:escape -option "
     "shift:both_capslock -option grp:lalt_lshift_toggle",
 
-    "xset q | grep -q '.local/share/fonts' || { xset +fp $HOME/.local/share/fonts; xset fp rehash; }",
+    "xset q | grep -q '.local/share/fonts' || { xset +fp "
+    "$HOME/.local/share/fonts; xset fp rehash; }",
     "pipewire"
 
 };

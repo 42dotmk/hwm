@@ -41,6 +41,7 @@ static const char *guidelinescmd[] = {
     "sh", "-c",
     "cd /home/halicea/projects/cc/cc-guidelines && exec hterm -e hed", NULL};
 static const char *calcmd[] = {"firefox", "https://calendar.google.com", NULL};
+static const char *dictcmd[] = {"hstt", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
 static const char *volupcmd[] = {
@@ -69,6 +70,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_c, spawn, {.v = calcmd}},
     {MODKEY, XK_t, spawn, {.v = todocmd}},
     {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
+    {MODKEY, XK_v, spawn, {.v = dictcmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
     {MODKEY, XK_q, killclient, {0}},

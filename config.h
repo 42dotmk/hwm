@@ -29,19 +29,21 @@ const char **autostart;
 
 static const char *termcmd[] = {"hterm", NULL};
 static const char *menucmd[] = {"hmenu", NULL};
+static const char *passcmd[] = {"hmenu", "pass", NULL};
 static const char *switchercmd[] = {"hws", NULL};
 static const char *tmuxcmd[] = {"hterm", "-e", "tmux", "new-session",
                                 "-A",    "-s", "main", NULL};
 static const char *mailcmd[] = {"hterm", "-e", "hed", "-c", "mail", NULL};
 static const char *todocmd[] = {"hterm", "-e", "hed",
                                 "/home/halicea/org/todo.md", NULL};
-static const char *browsercmd[] = {"firefox", NULL};
-static const char *filescmd[] = {"thunar", NULL};
+static const char *browsercmd[] = {"hmenu", "hist", NULL}; /* history + search */
+static const char *filescmd[] = {"hterm", "-e", "yazi", NULL};
 static const char *guidelinescmd[] = {
     "sh", "-c",
     "cd /home/halicea/projects/cc/cc-guidelines && exec hterm -e hed", NULL};
 static const char *calcmd[] = {"firefox", "https://calendar.google.com", NULL};
 static const char *dictcmd[] = {"hstt", NULL};
+static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
 static const char *volupcmd[] = {
@@ -62,6 +64,7 @@ static const Key basekeys[] = {
     /* modifier            key             function     argument */
     {MODKEY, XK_Return, spawn, {.v = termcmd}},
     {MODKEY, XK_space, spawn, {.v = menucmd}},
+    {MODKEY, XK_p, spawn, {.v = passcmd}},
     {MODKEY, XK_Tab, spawn, {.v = switchercmd}},
     {MODKEY, XK_b, spawn, {.v = browsercmd}},
     {MODKEY, XK_e, spawn, {.v = filescmd}},
@@ -73,6 +76,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_v, spawn, {.v = dictcmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
+    {MODKEY, XK_Escape, spawn, {.v = lockcmd}},
     {MODKEY, XK_q, killclient, {0}},
     {MODKEY | ShiftMask, XK_e, quit, {0}},
     {MODKEY | ShiftMask, XK_r, restart, {0}},
@@ -123,13 +127,11 @@ static const Button basebuttons[] = {
  * keep these idempotent or guard them (e.g. `pgrep x || x`) */
 static const char *autostartcmds[] = {
     "feh --no-fehbg --bg-fill --randomize ~/pictures/backgrounds/preffered",
-    "htray",
-    "hnd",
-    "picom",
-
+    "htray", "hnd", "picom",
+    /* lock after 10 min idle (xset s) and on DPMS/suspend via xss-lock */
+    "xset s 600 600", "pgrep -x xss-lock || xss-lock -- slock &",
     "setxkbmap -layout us,mk -option '' -option caps:escape -option "
     "shift:both_capslock -option grp:lalt_lshift_toggle",
-
     "xset q | grep -q '.local/share/fonts' || { xset +fp "
     "$HOME/.local/share/fonts; xset fp rehash; }",
     "pipewire"

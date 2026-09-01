@@ -41,7 +41,7 @@ static const char *filescmd[] = {"hterm", "-e", "yazi", NULL};
 static const char *guidelinescmd[] = {
     "sh", "-c",
     "cd /home/halicea/projects/cc/cc-guidelines && exec hterm -e hed", NULL};
-static const char *calcmd[] = {"firefox", "https://calendar.google.com", NULL};
+static const char *calcmd[] = {"hweb", "https://calendar.google.com", NULL};
 static const char *dictcmd[] = {"hstt", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
@@ -126,7 +126,7 @@ static const Button basebuttons[] = {
 /* run with `sh -c` when hwm starts, including after a reload —
  * keep these idempotent or guard them (e.g. `pgrep x || x`) */
 static const char *autostartcmds[] = {
-    "feh --no-fehbg --bg-fill --randomize ~/pictures/backgrounds/preffered",
+    "pgrep -x hbg || hbg",
     "htray", "hnd", "picom",
     /* lock after 10 min idle (xset s) and on DPMS/suspend via xss-lock */
     "xset s 600 600", "pgrep -x xss-lock || xss-lock -- slock &",

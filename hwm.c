@@ -79,12 +79,14 @@ typedef struct {
     size_t ws;      /* workspace shown here (nworkspaces = none) */
 } Monitor;
 
-/* a remembered placement, one `app:ws:idx:pct` line of layoutfile */
+/* a remembered placement, one `app:ws:idx:pct` line of layoutfile. An
+ * `app:::pct` line (no workspace, no index) is a pinned width only: the app
+ * opens where you are and hwm never rewrites its line */
 typedef struct {
     char *app;
-    int ws;  /* workspace */
-    int idx; /* column index */
-    int pct; /* column width, percent of the screen */
+    int ws;  /* workspace, -1 = wherever you are */
+    int idx; /* column index, -1 with ws */
+    int pct; /* column width, percent of the screen, 0 = default */
 } Rule;
 
 static void buttonpress(XEvent *e);
@@ -677,8 +679,8 @@ static int parserule(char *line, Rule *r) {
     if (!*line)
         return 0;
     r->app = estrdup(line);
-    r->ws = atoi(f[0]);
-    r->idx = atoi(f[1]);
+    r->ws = *f[0] ? atoi(f[0]) : -1;
+    r->idx = *f[1] ? atoi(f[1]) : -1;
     r->pct = atoi(f[2]);
     return 1;
 }
@@ -733,8 +735,15 @@ static void writelayout(Rule *rules) {
         return;
     }
     for (i = 0; i < arrlen(rules); i++)
-        fprintf(fp, "%s:%d:%d:%d\n", rules[i].app, rules[i].ws, rules[i].idx,
-                rules[i].pct);
+        if (rules[i].ws < 0) {
+            fprintf(fp, "%s:::", rules[i].app);
+            if (rules[i].pct > 0)
+                fprintf(fp, "%d", rules[i].pct);
+            fputc('\n', fp);
+        } else {
+            fprintf(fp, "%s:%d:%d:%d\n", rules[i].app, rules[i].ws,
+                    rules[i].idx, rules[i].pct);
+        }
     if (fclose(fp) != 0 || rename(tmp, path) != 0)
         fprintf(stderr, "hwm: cannot write %s\n", path);
 }
@@ -751,7 +760,8 @@ static void savelayout(Client *c) {
     n.pct = (int)(c->col->width * 100.0f + 0.5f);
     rules = loadlayout();
     r = findrule(rules, c->app);
-    if (r && r->ws == n.ws && r->idx == n.idx && r->pct == n.pct) {
+    if (r && (r->ws < 0 || /* opens wherever you are: never recorded */
+              (r->ws == n.ws && r->idx == n.idx && r->pct == n.pct))) {
         freelayout(rules);
         return;
     }
@@ -804,11 +814,11 @@ static Column *place(Client *c, int follow) {
         }
         col = attachat((size_t)r->ws,
                        MIN(MAX(r->idx, 0), arrlen(wss[r->ws].cols)), c);
-        if (r->pct > 0)
-            setcolwidth(col, (float)r->pct / 100.0f);
     } else {
         col = attachnew(curws, curwsp()->selcol, c);
     }
+    if (r && r->pct > 0)
+        setcolwidth(col, (float)r->pct / 100.0f);
     freelayout(rules);
     return col;
 }

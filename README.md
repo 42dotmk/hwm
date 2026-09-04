@@ -92,7 +92,10 @@ switches to the workspace. Moving, reordering, resizing or sending a
 window to another workspace updates the record at once. The records live
 in `layoutfile` (`~/.config/hackable/hwm.layout`), one
 `app:workspace:column:percent` line per app, and the file is read every
-time a window opens, so it can be edited by hand. Apps that share a
+time a window opens, so it can be edited by hand. A line with empty
+workspace and column fields, `app:::` or `app:::percent`, opts an app
+out: it opens wherever you are (at that width, if given) and hwm never
+rewrites its line. Apps that share a
 WM_CLASS (every hterm, say) share one placement; SDL programs such as
 hterm take a distinct class from `SDL_VIDEO_X11_WMCLASS=name` in their
 environment.

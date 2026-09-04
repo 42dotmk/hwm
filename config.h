@@ -25,7 +25,9 @@ const size_t nworkspaces = 10;
  * column index and width it was last given, and its new windows open there.
  * One `app:workspace:column:percent` line per app in layoutfile; hwm
  * rewrites it as you move and resize, and reads it whenever a window opens,
- * so edits by hand take effect at once */
+ * so edits by hand take effect at once. Write `app:::` (or `app:::percent`
+ * for a fixed width) to have an app open wherever you are and never be
+ * recorded */
 const int preservelayout = 1;
 const char layoutfile[] = "~/.config/hackable/hwm.layout";
 

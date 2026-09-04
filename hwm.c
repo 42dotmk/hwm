@@ -33,6 +33,7 @@ static void *erealloc(void *ptr, size_t size);
 #include "config.h"
 
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
 #define MOUSEMASK (ButtonPressMask | ButtonReleaseMask | PointerMotionMask)
 #define CLEANMASK(M)                                                           \
     ((M) & ~(numlockmask | LockMask) &                                         \
@@ -48,6 +49,7 @@ struct Client {
     int x, y, w, h; /* last applied geometry */
     int isfloating;
     size_t ws;
+    char *app; /* WM_CLASS class, the identity placements are kept by */
 };
 
 struct Column {
@@ -76,6 +78,14 @@ typedef struct {
     int x, y, w, h; /* geometry from RandR */
     size_t ws;      /* workspace shown here (nworkspaces = none) */
 } Monitor;
+
+/* a remembered placement, one `app:ws:idx:pct` line of layoutfile */
+typedef struct {
+    char *app;
+    int ws;  /* workspace */
+    int idx; /* column index */
+    int pct; /* column width, percent of the screen */
+} Rule;
 
 static void buttonpress(XEvent *e);
 static void clientmessage(XEvent *e);
@@ -183,6 +193,13 @@ static void *ecalloc(size_t nmemb, size_t size) {
 
 static void *erealloc(void *ptr, size_t size) {
     void *p = realloc(ptr, size);
+    if (!p)
+        die("hwm: out of memory");
+    return p;
+}
+
+static char *estrdup(const char *s) {
+    char *p = strdup(s);
     if (!p)
         die("hwm: out of memory");
     return p;
@@ -484,17 +501,26 @@ static void attach(Column *col, Client *c) {
     wss[col->ws].selcol = col;
 }
 
-/* put c alone into a new column inserted after `after` (NULL = leftmost) */
-static Column *attachnew(size_t wi, Column *after, Client *c) {
+/* put c alone into a new column inserted at index `at` */
+static Column *attachat(size_t wi, ptrdiff_t at, Client *c) {
     Workspace *ws = &wss[wi];
     Column *col = ecalloc(1, sizeof(Column));
-    ptrdiff_t at = after ? colidx(ws, after) + 1 : 0;
 
     col->width = defwidth;
     col->ws = wi;
     arrins(ws->cols, at, col);
     attach(col, c);
     return col;
+}
+
+/* put c alone into a new column inserted after `after` (NULL = leftmost) */
+static Column *attachnew(size_t wi, Column *after, Client *c) {
+    return attachat(wi, after ? colidx(&wss[wi], after) + 1 : 0, c);
+}
+
+/* clamp, not layout: callers rearrange (and scroll) themselves */
+static void setcolwidth(Column *col, float w) {
+    col->width = w < 0.1f ? 0.1f : w > 1.0f ? 1.0f : w;
 }
 
 /* remove c from its column; empty columns are freed */
@@ -621,8 +647,173 @@ static void placefloat(Client *c, XWindowAttributes *wa) {
     c->y = MAX(m->y, c->y);
 }
 
-static void manage(Window w) {
-    Workspace *ws = curwsp();
+/* placement memory: layoutfile holds one `app:workspace:column:percent`
+ * line per app. It is read afresh whenever a window is placed, so edits by
+ * hand take effect at once, and rewritten whenever a placement changes:
+ * a few lines through a temp file and rename, microseconds and atomic */
+
+static const char *layoutpath(void) {
+    static char path[PATH_MAX];
+    const char *home = getenv("HOME");
+
+    if (layoutfile[0] == '~' && home)
+        snprintf(path, sizeof path, "%s%s", home, layoutfile + 1);
+    else
+        snprintf(path, sizeof path, "%s", layoutfile);
+    return path;
+}
+
+/* split from the right, so the app name itself may contain colons */
+static int parserule(char *line, Rule *r) {
+    char *f[3], *p;
+    int i;
+
+    for (i = 2; i >= 0; i--) {
+        if (!(p = strrchr(line, ':')))
+            return 0;
+        *p = '\0';
+        f[i] = p + 1;
+    }
+    if (!*line)
+        return 0;
+    r->app = estrdup(line);
+    r->ws = atoi(f[0]);
+    r->idx = atoi(f[1]);
+    r->pct = atoi(f[2]);
+    return 1;
+}
+
+static Rule *loadlayout(void) {
+    Rule *rules = NULL, r;
+    char line[512];
+    FILE *fp;
+
+    if (!preservelayout || !(fp = fopen(layoutpath(), "r")))
+        return NULL;
+    while (fgets(line, sizeof line, fp)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (parserule(line, &r))
+            arrput(rules, r);
+    }
+    fclose(fp);
+    return rules;
+}
+
+static void freelayout(Rule *rules) {
+    ptrdiff_t i;
+
+    for (i = 0; i < arrlen(rules); i++)
+        free(rules[i].app);
+    arrfree(rules);
+}
+
+static Rule *findrule(Rule *rules, const char *app) {
+    ptrdiff_t i;
+
+    for (i = 0; i < arrlen(rules); i++)
+        if (!strcmp(rules[i].app, app))
+            return &rules[i];
+    return NULL;
+}
+
+static void writelayout(Rule *rules) {
+    const char *path = layoutpath();
+    char tmp[PATH_MAX + 8], *slash;
+    FILE *fp;
+    ptrdiff_t i;
+
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    if ((slash = strrchr(tmp, '/'))) { /* the directory may not exist yet */
+        *slash = '\0';
+        mkdir(tmp, 0755);
+        *slash = '/';
+    }
+    if (!(fp = fopen(tmp, "w"))) {
+        fprintf(stderr, "hwm: cannot write %s\n", tmp);
+        return;
+    }
+    for (i = 0; i < arrlen(rules); i++)
+        fprintf(fp, "%s:%d:%d:%d\n", rules[i].app, rules[i].ws, rules[i].idx,
+                rules[i].pct);
+    if (fclose(fp) != 0 || rename(tmp, path) != 0)
+        fprintf(stderr, "hwm: cannot write %s\n", path);
+}
+
+/* remember where c sits, so the next window of its app opens there */
+static void savelayout(Client *c) {
+    Rule *rules, *r, n;
+
+    if (!preservelayout || !c || !c->app || !c->col)
+        return;
+    n.app = c->app;
+    n.ws = (int)c->ws;
+    n.idx = (int)colidx(&wss[c->ws], c->col);
+    n.pct = (int)(c->col->width * 100.0f + 0.5f);
+    rules = loadlayout();
+    r = findrule(rules, c->app);
+    if (r && r->ws == n.ws && r->idx == n.idx && r->pct == n.pct) {
+        freelayout(rules);
+        return;
+    }
+    if (r) {
+        r->ws = n.ws;
+        r->idx = n.idx;
+        r->pct = n.pct;
+    } else {
+        n.app = estrdup(c->app);
+        arrput(rules, n);
+    }
+    writelayout(rules);
+    freelayout(rules);
+}
+
+/* WM_CLASS class, falling back to the instance name */
+static char *getapp(Window w) {
+    XClassHint ch = {NULL, NULL};
+    char *app = NULL;
+
+    if (!XGetClassHint(dpy, w, &ch))
+        return NULL;
+    if (ch.res_class && *ch.res_class)
+        app = estrdup(ch.res_class);
+    else if (ch.res_name && *ch.res_name)
+        app = estrdup(ch.res_name);
+    if (ch.res_class)
+        XFree(ch.res_class);
+    if (ch.res_name)
+        XFree(ch.res_name);
+    return app;
+}
+
+/* tile a new window where its app was last placed, else next to the
+ * selection. follow: switch to that workspace (not while adopting windows
+ * at startup, which would hop around) */
+static Column *place(Client *c, int follow) {
+    Rule *rules = NULL, *r = NULL;
+    Column *col;
+    Arg a;
+
+    if (c->app) {
+        rules = loadlayout();
+        r = findrule(rules, c->app);
+    }
+    if (r && r->ws >= 0 && (size_t)r->ws < nworkspaces) {
+        if (follow) {
+            a.i = r->ws;
+            view(&a);
+        }
+        col = attachat((size_t)r->ws,
+                       MIN(MAX(r->idx, 0), arrlen(wss[r->ws].cols)), c);
+        if (r->pct > 0)
+            setcolwidth(col, (float)r->pct / 100.0f);
+    } else {
+        col = attachnew(curws, curwsp()->selcol, c);
+    }
+    freelayout(rules);
+    return col;
+}
+
+static void manage(Window w, int follow) {
     XWindowAttributes wa;
     Window trans;
     Client *c;
@@ -636,6 +827,7 @@ static void manage(Window w) {
     c = ecalloc(1, sizeof(Client));
     c->win = w;
     c->ws = curws;
+    c->app = getapp(w);
     type = getwintype(w);
     for (i = NetTypeDialog; i <= NetTypeNotification; i++)
         if (type == atoms[i])
@@ -648,26 +840,27 @@ static void manage(Window w) {
         c->isfloating = 1;
     if (c->isfloating) {
         placefloat(c, &wa);
-        arrput(ws->floats, c);
+        arrput(curwsp()->floats, c);
         if (type == atoms[NetTypeNotification])
             wantfocus = 0; /* notifications must not steal focus */
     } else {
-        ensurevisible(attachnew(curws, ws->selcol, c));
+        ensurevisible(place(c, follow));
     }
     arrput(clients, c);
     XSetWindowBorderWidth(dpy, w, borderpx);
     XSelectInput(dpy, w,
                  EnterWindowMask | FocusChangeMask | StructureNotifyMask);
-    setcardinal(w, atoms[NetWMDesktop], (long)curws);
+    setcardinal(w, atoms[NetWMDesktop], (long)c->ws);
     updateclientlist();
-    arrangews(curws);
+    arrangews(c->ws);
     XMapWindow(dpy, w);
-    if (wantfocus) {
+    if (wantfocus && c->ws == curws) {
         focus(c);
     } else {
         XSetWindowBorder(dpy, w, unfocuspx);
         grabbuttons(c, 0);
     }
+    savelayout(c);
 }
 
 static void unmanage(Client *c) {
@@ -685,6 +878,7 @@ static void unmanage(Client *c) {
             arrdel(clients, i);
             break;
         }
+    free(c->app);
     free(c);
     updateclientlist();
     arrangews(wi);
@@ -832,6 +1026,7 @@ void movehorz(const Arg *arg) {
     ensurevisible(c->col);
     arrangews(curws);
     focus(c);
+    savelayout(c);
 }
 
 /* consume: stack the focused window into the adjacent column */
@@ -852,6 +1047,7 @@ void stackto(const Arg *arg) {
     ensurevisible(col);
     arrangews(curws);
     focus(c);
+    savelayout(c);
 }
 
 void movevert(const Arg *arg) {
@@ -869,11 +1065,7 @@ void movevert(const Arg *arg) {
     col->clients[i] = col->clients[j];
     col->clients[j] = c;
     arrangews(curws);
-}
-
-/* clamp, not layout: callers rearrange (and scroll) themselves */
-static void setcolwidth(Column *col, float w) {
-    col->width = w < 0.1f ? 0.1f : w > 1.0f ? 1.0f : w;
+    savelayout(c);
 }
 
 void cyclewidth(const Arg *arg) {
@@ -896,6 +1088,7 @@ void cyclewidth(const Arg *arg) {
     col->width = widths[(best + 1) % arrlen(widths)];
     ensurevisible(col);
     arrangews(curws);
+    savelayout(col->sel);
 }
 
 void growwidth(const Arg *arg) {
@@ -906,6 +1099,7 @@ void growwidth(const Arg *arg) {
     setcolwidth(col, col->width + arg->f);
     ensurevisible(col);
     arrangews(curws);
+    savelayout(col->sel);
 }
 
 void setwidth(const Arg *arg) {
@@ -916,6 +1110,7 @@ void setwidth(const Arg *arg) {
     setcolwidth(col, arg->f);
     ensurevisible(col);
     arrangews(curws);
+    savelayout(col->sel);
 }
 
 void scrollby(const Arg *arg) {
@@ -960,6 +1155,7 @@ void togglefloat(const Arg *arg) {
     }
     arrangews(curws);
     focus(c);
+    savelayout(c);
 }
 
 void view(const Arg *arg) {
@@ -1016,6 +1212,7 @@ void movewsmon(const Arg *arg) {
 void sendto(const Arg *arg) {
     Workspace *target;
     Client *c = focused();
+    float width;
 
     if (!c || arg->i < 0 || (size_t)arg->i >= nworkspaces ||
         (size_t)arg->i == curws)
@@ -1025,14 +1222,16 @@ void sendto(const Arg *arg) {
         detachfloat(c);
         arrput(target->floats, c);
     } else {
+        width = c->col->width;
         detach(c);
-        attachnew((size_t)arg->i, target->selcol, c);
+        setcolwidth(attachnew((size_t)arg->i, target->selcol, c), width);
     }
     c->ws = (size_t)arg->i;
     setcardinal(c->win, atoms[NetWMDesktop], arg->i);
     arrangews(curws);
     arrangews((size_t)arg->i);
     focus(focused());
+    savelayout(c);
 }
 
 void killclient(const Arg *arg) {
@@ -1128,6 +1327,8 @@ static void drag(int mode) {
         }
     } while (ev.type != ButtonRelease);
     XUngrabPointer(dpy, CurrentTime);
+    if (mode == DragWidth)
+        savelayout(col->sel);
 }
 
 void dragscroll(const Arg *arg) {
@@ -1327,7 +1528,7 @@ static void maprequest(XEvent *e) {
 
     if (!XGetWindowAttributes(dpy, ev->window, &wa) || wa.override_redirect)
         return;
-    manage(ev->window);
+    manage(ev->window, 1);
 }
 
 static void unmapnotify(XEvent *e) {
@@ -1435,7 +1636,7 @@ static void scan(void) {
     for (i = 0; i < num; i++)
         if (XGetWindowAttributes(dpy, wins[i], &wa) && !wa.override_redirect &&
             wa.map_state == IsViewable)
-            manage(wins[i]);
+            manage(wins[i], 0);
     if (wins)
         XFree(wins);
 }

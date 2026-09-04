@@ -70,6 +70,8 @@ extern const float
     floatsize; /* size of newly floated windows, fraction of monitor */
 extern const float
     gesturescale; /* three-finger swipe: scroll px per touchpad px */
+extern const int preservelayout; /* reopen apps where they were last placed */
+extern const char layoutfile[];  /* where placements are kept; ~ is $HOME */
 extern float *widths;
 extern const size_t nworkspaces;
 extern Key *keys;

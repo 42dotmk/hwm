@@ -21,39 +21,41 @@ const float gesturescale =
     3.0f; /* three-finger swipe: scroll px per touchpad px */
 const size_t nworkspaces = 10;
 
+/* placement memory: every app (by WM_CLASS class) remembers the workspace,
+ * column index and width it was last given, and its new windows open there.
+ * One `app:workspace:column:percent` line per app in layoutfile; hwm
+ * rewrites it as you move and resize, and reads it whenever a window opens,
+ * so edits by hand take effect at once */
+const int preservelayout = 1;
+const char layoutfile[] = "~/.config/hackable/hwm.layout";
+
 /* stb_ds arrays, built by initconfig() */
 float *widths;
 Key *keys;
 Button *buttons;
 const char **autostart;
 
+/* SDL_VIDEO_X11_WMCLASS gives each hterm role its own WM_CLASS, so
+ * preservelayout remembers a place per role rather than one for all hterms */
 static const char *termcmd[] = {"hterm", NULL};
 static const char *menucmd[] = {"hmenu", NULL};
 static const char *passcmd[] = {"hmenu", "pass", NULL};
 static const char *switchercmd[] = {"hws", NULL};
-static const char *tmuxcmd[] = {"hterm", "-e", "tmux", "new-session",
-                                "-A",    "-s", "main", NULL};
-static const char *mailcmd[] = {"hterm", "-e", "hed", "-c", "mail", NULL};
-static const char *todocmd[] = {"hterm", "-e", "hed",
-                                "/home/halicea/org/todo.md", NULL};
+static const char *tmuxcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htmux", "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL};
+static const char *mailcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail", NULL};
+static const char *todocmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e", "hed", "/home/halicea/org/todo.md", NULL};
 static const char *browsercmd[] = {"hmenu", "hist", NULL}; /* history + search */
-static const char *filescmd[] = {"hterm", "-e", "yazi", NULL};
-static const char *guidelinescmd[] = {
-    "sh", "-c",
-    "cd /home/halicea/projects/cc/cc-guidelines && exec hterm -e hed", NULL};
-static const char *calcmd[] = {"hweb", "https://calendar.google.com", NULL};
+static const char *filescmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
+static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
+static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
-static const char *volupcmd[] = {
-    "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
-static const char *voldowncmd[] = {"wpctl", "set-volume",
-                                   "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
-static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@",
-                                "toggle", NULL};
-static const char *micmutecmd[] = {"wpctl", "set-mute",
-                                   "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
+static const char *volupcmd[] = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
+static const char *voldowncmd[] = {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
+static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL};
+static const char *micmutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
 static const char *briupcmd[] = {"brightnessctl", "set", "10%+", NULL};
 static const char *bridowncmd[] = {"brightnessctl", "set", "10%-", NULL};
 static const char *playcmd[] = {"playerctl", "play-pause", NULL};

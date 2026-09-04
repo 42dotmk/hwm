@@ -80,8 +80,22 @@ hwm watches its own binary and restarts in place when it changes, so a
 plain `make` (or `sudo make install`, if you run the installed copy)
 applies the new configuration within a couple of seconds. Windows survive
 a restart — hwm re-adopts them on startup — but the arrangement resets:
-every window comes back in its own column on workspace 1. Mod+Shift+r
-forces a restart without a rebuild.
+every window comes back in its own column, on workspace 1 unless its app
+has a remembered placement (below). Mod+Shift+r forces a restart without
+a rebuild.
+
+With `preservelayout` set, hwm remembers where each app was last placed:
+its workspace, column index and column width, keyed by the WM_CLASS
+class. A new window of that app opens on that workspace, at that column
+index (clamped to the number of columns there), at that width, and hwm
+switches to the workspace. Moving, reordering, resizing or sending a
+window to another workspace updates the record at once. The records live
+in `layoutfile` (`~/.config/hackable/hwm.layout`), one
+`app:workspace:column:percent` line per app, and the file is read every
+time a window opens, so it can be edited by hand. Apps that share a
+WM_CLASS (every hterm, say) share one placement; SDL programs such as
+hterm take a distinct class from `SDL_VIDEO_X11_WMCLASS=name` in their
+environment.
 
 `autostart` in `config.h` is a list of shell commands run when hwm starts,
 including after every restart — keep them idempotent or guard them

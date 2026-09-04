@@ -30,6 +30,7 @@ Monitors (`mons`, from XRandR via `updatemons()`, sorted left→right): each `Wo
 
 Non-obvious mechanics:
 
+- **Placement memory** (`preservelayout`): `manage()` → `place()` looks the window's WM_CLASS class up in `layoutfile` (`app:workspace:column:percent` lines) and tiles it there, switching to that workspace unless adopting at startup; every command that moves/reorders/resizes a tiled window ends with `savelayout()`, which rewrites the file atomically (temp + rename). The file is re-read on every lookup and save, so there is no in-memory copy and hand edits apply immediately.
 - **Hidden workspaces are not unmapped** — `arrangews()` parks them offscreen at `x - 3*sw`. Unmapping would generate UnmapNotify events indistinguishable from windows closing themselves (`unmapnotify()` → `unmanage()`).
 - **Event loop** (`run()`): drains X events, then `select()`s on the X fd with a timeout. The timeout drives the binary self-watch and the workspace-indicator auto-hide; no other timers exist.
 - **Floating**: dialogs, notifications, utility/menu/splash/toolbar types, transients, and fixed-size windows float above the strip (`Client.col == NULL`). Notifications never steal focus.

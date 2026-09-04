@@ -47,6 +47,7 @@ static const char *todocmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "
 static const char *browsercmd[] = {"hmenu", "hist", NULL}; /* history + search */
 static const char *filescmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
 static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
+static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
 static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
 static const char *lockcmd[] = {"slock", NULL};
@@ -75,6 +76,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_c, spawn, {.v = calcmd}},
     {MODKEY, XK_t, spawn, {.v = todocmd}},
     {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
+    {MODKEY, XK_n, spawn, {.v = orgcmd}},
     {MODKEY, XK_v, spawn, {.v = dictcmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},

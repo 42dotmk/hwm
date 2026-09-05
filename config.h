@@ -47,6 +47,7 @@ static const char *tmuxcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htmux", "hterm", "
 static const char *mailcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail", NULL};
 static const char *todocmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e", "hed", "/home/halicea/org/todo.md", NULL};
 static const char *browsercmd[] = {"hmenu", "hist", NULL}; /* history + search */
+static const char *privatecmd[] = {"hweb", "-p", NULL}; /* private window */
 static const char *filescmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
 static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
 static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
@@ -72,6 +73,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_p, spawn, {.v = passcmd}},
     {MODKEY, XK_Tab, spawn, {.v = switchercmd}},
     {MODKEY, XK_b, spawn, {.v = browsercmd}},
+    {MODKEY | ShiftMask, XK_b, spawn, {.v = privatecmd}},
     {MODKEY, XK_e, spawn, {.v = filescmd}},
     {MODKEY | ShiftMask, XK_Return, spawn, {.v = tmuxcmd}},
     {MODKEY, XK_m, spawn, {.v = mailcmd}},

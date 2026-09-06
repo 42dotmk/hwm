@@ -1,4 +1,5 @@
 hwm
 *.o
+test_layout
 .hedlog
 tags

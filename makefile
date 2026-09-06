@@ -10,11 +10,28 @@ CFLAGS  = -std=c11 -pedantic -Wall -Wextra -Os -D_POSIX_C_SOURCE=200809L \
           -DHWM_VERSION='"$(VERSION)"' -isystem vendor
 LDLIBS  = -lX11 -lXrandr -linput -ludev
 BINDIR  = $(HOME)/.local/bin
+OBJ     = hwm.o layout.o
 
 all: hwm
 
-hwm: hwm.c hwm.h config.h vendor/stb_ds.h
-	$(CC) $(CFLAGS) -o $@ hwm.c $(LDLIBS)
+hwm: $(OBJ)
+	$(CC) -o $@ $(OBJ) $(LDLIBS)
+
+hwm.o: hwm.c hwm.h layout.h config.h vendor/stb_ds.h
+	$(CC) $(CFLAGS) -c hwm.c
+
+layout.o: layout.c layout.h vendor/stb_ds.h
+	$(CC) $(CFLAGS) -c layout.c
+
+# the layout core is X-free: its tests run headless
+test_layout: test_layout.o layout.o
+	$(CC) -o $@ test_layout.o layout.o
+
+test_layout.o: test_layout.c layout.h vendor/stb_ds.h
+	$(CC) $(CFLAGS) -c test_layout.c
+
+check: test_layout
+	./test_layout
 
 install: hwm
 	mkdir -p $(BINDIR)
@@ -24,6 +41,6 @@ uninstall:
 	rm -f $(BINDIR)/hwm
 
 clean:
-	rm -f hwm
+	rm -f hwm test_layout $(OBJ) test_layout.o
 
-.PHONY: all install uninstall clean
+.PHONY: all check install uninstall clean

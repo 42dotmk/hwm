@@ -53,6 +53,7 @@ static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc
 static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
 static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
+static const char *talkcmd[] = {"hal", "talk", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
@@ -82,6 +83,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
     {MODKEY, XK_n, spawn, {.v = orgcmd}},
     {MODKEY, XK_v, spawn, {.v = dictcmd}},
+    {MODKEY | ShiftMask, XK_v, spawn, {.v = talkcmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
     {MODKEY, XK_Escape, spawn, {.v = lockcmd}},
@@ -142,7 +144,8 @@ static const char *autostartcmds[] = {
     "shift:both_capslock -option grp:lalt_lshift_toggle",
     "xset q | grep -q '.local/share/fonts' || { xset +fp "
     "$HOME/.local/share/fonts; xset fp rehash; }",
-    "pipewire"
+    "pipewire",
+    "pgrep -x hald || hald"
 
 };
 

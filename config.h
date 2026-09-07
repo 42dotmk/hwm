@@ -53,7 +53,7 @@ static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc
 static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
 static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
-static const char *talkcmd[] = {"hal", "talk", NULL};
+static const char *talkcmd[] = {"hai", "talk", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
@@ -145,7 +145,7 @@ static const char *autostartcmds[] = {
     "xset q | grep -q '.local/share/fonts' || { xset +fp "
     "$HOME/.local/share/fonts; xset fp rehash; }",
     "pipewire",
-    "pgrep -x hald || hald"
+    "pgrep -x haid || haid"
 
 };
 

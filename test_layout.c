@@ -323,7 +323,7 @@ int main(void) {
     a = tile(NULL);
     cmdf(setwidth, 0.3f);
     ndesktop = nwarp = 0;
-    cmd(sendto, 1);
+    cmd(sendws, 1);
     CHECK(a->ws == 1 && ndesktop == 1 && ncols() == 0 && curws == 0);
     CHECK(G(a).x == -3000 + 6 && G(a).w == 300 - 16);
     CHECK(wss[1].cols[0]->width == 0.3f);
@@ -373,7 +373,7 @@ int main(void) {
     cmdf(setwidth, 0.7f);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
                   "edit:0:0:50\nweb:0:1:70\n"));
-    cmd(sendto, 3);
+    cmd(sendws, 3);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
                   "edit:0:0:50\nweb:3:0:70\n"));
     cmd(view, 5);
@@ -408,7 +408,7 @@ int main(void) {
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
                   "edit:0:0:50\nfree:::\nwide:::35\nx:y:1:0:40\n"));
     cmd(movehorz, +1); /* nothing to swap with: no change, no write */
-    cmd(sendto, 2);
+    cmd(sendws, 2);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
                   "edit:0:0:50\nfree:::\nwide:::35\nx:y:2:0:40\n"));
 

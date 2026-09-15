@@ -40,6 +40,23 @@ nested server:
     DISPLAY=:1 ./hwm &
     DISPLAY=:1 xterm &
 
+## Scripting
+
+Everything a key can do, `hwm send` can do too, over a unix socket at
+`$XDG_RUNTIME_DIR/hwm$DISPLAY.sock`:
+
+    hwm send view 2             # same as Mod+2
+    hwm send setwidth 0.5
+    hwm send spawn hterm -e htop
+    hwm send                    # lists the commands
+    hwm dump                    # monitors, workspaces, columns, windows
+
+`dump` prints one object per line (`mon`, `ws`, `col`, `win`, `float`) with
+`key=value` fields and `sel`/`focused`/`visible`/`current` flags, for `awk`.
+A command acts on the monitor under the pointer, exactly like a keypress.
+The wire format is the argv NUL-separated; the reply is `ok` followed by any
+payload, or `err <why>`.
+
 ## Default bindings (Mod = Super)
 
 | Binding                    | Action                                     |

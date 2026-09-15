@@ -897,7 +897,7 @@ void movewsmon(const Arg *arg) {
     focus(focused());
 }
 
-void sendto(const Arg *arg) {
+void sendws(const Arg *arg) {
     Workspace *target;
     Client *c = focused();
     float width;

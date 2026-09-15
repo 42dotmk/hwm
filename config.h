@@ -204,6 +204,6 @@ void initconfig(void) {
     for (i = 0; i < nworkspaces; i++) {
         arrput(keys, ((Key){MODKEY, XK_0 + i, view, {.i = (int)i}}));
         arrput(keys,
-               ((Key){MODKEY | ShiftMask, XK_0 + i, sendto, {.i = (int)i}}));
+               ((Key){MODKEY | ShiftMask, XK_0 + i, sendws, {.i = (int)i}}));
     }
 }

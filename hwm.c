@@ -19,7 +19,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -47,6 +49,7 @@ static void keypress(XEvent *e);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void unmapnotify(XEvent *e);
+static void syncactivemon(void);
 
 static Display *dpy;
 static Window root;
@@ -60,6 +63,8 @@ static int dorestart;
 static char selfpath[PATH_MAX];
 static struct stat selfstat;
 static int selfok;
+static int sfd = -1; /* the control socket `hwm send` talks to */
+static char sockfile[sizeof((struct sockaddr_un *)0)->sun_path];
 static struct libinput *li; /* NULL: touchpad gestures unavailable */
 static int swiping;         /* a three-finger swipe is in flight */
 static float swipex;        /* the scroll position it is tracking */
@@ -124,6 +129,48 @@ static void (*handler[LASTEvent])(XEvent *) = {
     [MapRequest] = maprequest,
     [UnmapNotify] = unmapnotify,
 };
+
+/* the command surface: what `hwm send` can ask for, by name. Every entry is
+ * a binding target from config.h plus how its argument is spelled; dump is
+ * the one query. Add here when adding a command */
+enum { ANONE, AINT, AFLOAT, AARGV, ADUMP };
+static const struct {
+    const char *name;
+    void (*func)(const Arg *);
+    int type;
+    const char *help;
+} commands[] = {
+    {"focushorz", focushorz, AINT, "-1 left / +1 right (columns)"},
+    {"focusvert", focusvert, AINT, "-1 up / +1 down (within column)"},
+    {"movehorz", movehorz, AINT, "move window/column -1 left / +1 right"},
+    {"stackto", stackto, AINT, "stack window into the -1/+1 adjacent column"},
+    {"movevert", movevert, AINT, "move window -1 up / +1 down in its column"},
+    {"cyclewidth", cyclewidth, ANONE, "cycle column width through the presets"},
+    {"growwidth", growwidth, AFLOAT, "column width delta, fraction of screen"},
+    {"setwidth", setwidth, AFLOAT, "column width, fraction of screen"},
+    {"scrollby", scrollby, AFLOAT, "scroll delta, fraction of screen"},
+    {"togglefull", togglefull, ANONE, "fullscreen the focused column"},
+    {"togglefloat", togglefloat, ANONE, "float/tile the focused window"},
+    {"view", view, AINT, "show workspace N"},
+    {"sendws", sendws, AINT, "send the focused window to workspace N"},
+    {"movewsmon", movewsmon, AINT, "move workspace to the -1/+1 monitor"},
+    {"killclient", killclient, ANONE, "close the focused window"},
+    {"spawn", spawn, AARGV, "run a command"},
+    {"restart", restart, ANONE, "re-exec hwm (picks up a rebuilt binary)"},
+    {"quit", quit, ANONE, "exit hwm"},
+    {"dump", NULL, ADUMP, "print monitors, workspaces, columns and windows"},
+};
+static const char *argnames[] = {"", "N", "F", "CMD...", ""};
+
+/* $XDG_RUNTIME_DIR/hwm<DISPLAY>.sock, so a Xephyr hwm is driven with
+ * DISPLAY=:1 like any X client */
+static int sockpath(char *buf, size_t n) {
+    const char *disp = getenv("DISPLAY"), *dir = getenv("XDG_RUNTIME_DIR");
+
+    if (!disp)
+        return 0;
+    return snprintf(buf, n, "%s/hwm%s.sock", dir ? dir : "/tmp", disp) < (int)n;
+}
 
 static void setcardinal(Window w, Atom prop, long value) {
     XChangeProperty(dpy, w, prop, XA_CARDINAL, 32, PropModeReplace,
@@ -511,6 +558,215 @@ void dragwidth(const Arg *arg) {
         drag(DragResize);
     else if (curwsp()->selcol)
         drag(DragWidth);
+}
+
+/* the control socket */
+
+/* the model as text, one object per line: mon, ws, col, win, float. Hidden
+ * workspaces with nothing in them are skipped */
+static void dump(int fd) {
+    Workspace *ws;
+    Column *col;
+    Client *c;
+    ptrdiff_t i, j, k;
+    size_t wi;
+
+    for (i = 0; i < arrlen(mons); i++)
+        dprintf(fd, "mon %td x=%d y=%d w=%d h=%d ws=%ld\n", i, mons[i].x,
+                mons[i].y, mons[i].w, mons[i].h,
+                mons[i].ws < nworkspaces ? (long)mons[i].ws : -1L);
+    for (wi = 0; wi < nworkspaces; wi++) {
+        ws = &wss[wi];
+        if (!arrlen(ws->cols) && !arrlen(ws->floats) && wsmon(wi)->ws != wi)
+            continue;
+        dprintf(fd, "ws %zu mon=%zu scroll=%d%s%s\n", wi, ws->mon, ws->scroll,
+                wsmon(wi)->ws == wi ? " visible" : "",
+                wi == curws ? " current" : "");
+        for (j = 0; j < arrlen(ws->cols); j++) {
+            col = ws->cols[j];
+            dprintf(fd, "col %td ws=%zu width=%.3f%s%s\n", j, wi, col->width,
+                    col->full ? " full" : "", col == ws->selcol ? " sel" : "");
+            for (k = 0; k < arrlen(col->clients); k++) {
+                c = col->clients[k];
+                dprintf(fd,
+                        "win 0x%lx ws=%zu col=%td x=%d y=%d w=%d h=%d "
+                        "app=%s%s%s\n",
+                        c->win, wi, j, c->x, c->y, c->w, c->h,
+                        c->app ? c->app : "", c == col->sel ? " sel" : "",
+                        c == focused() && wi == curws ? " focused" : "");
+            }
+        }
+        for (j = 0; j < arrlen(ws->floats); j++) {
+            c = ws->floats[j];
+            dprintf(fd, "float 0x%lx ws=%zu x=%d y=%d w=%d h=%d app=%s%s%s\n",
+                    c->win, wi, c->x, c->y, c->w, c->h, c->app ? c->app : "",
+                    c == ws->floatsel ? " sel" : "",
+                    c == focused() && wi == curws ? " focused" : "");
+        }
+    }
+}
+
+/* run argv for a client: the reply is "ok" plus any payload, or "err why".
+ * Like a keypress, the command acts on the monitor under the pointer */
+static void runcmd(int fd, int argc, char **argv) {
+    const char *err = NULL;
+    char *end;
+    Arg a = {0};
+    size_t i;
+
+    if (argc < 1) {
+        dprintf(fd, "err no command\n");
+        return;
+    }
+    for (i = 0; i < LENGTH(commands); i++)
+        if (!strcmp(commands[i].name, argv[0]))
+            break;
+    if (i == LENGTH(commands)) {
+        dprintf(fd, "err unknown command %s\n", argv[0]);
+        return;
+    }
+    switch (commands[i].type) {
+    case ANONE:
+        if (argc != 1)
+            err = "takes no argument";
+        break;
+    case AINT:
+        if (argc != 2)
+            err = "needs an integer";
+        else {
+            a.i = (int)strtol(argv[1], &end, 10);
+            if (end == argv[1] || *end)
+                err = "needs an integer";
+        }
+        break;
+    case AFLOAT:
+        if (argc != 2)
+            err = "needs a number";
+        else {
+            a.f = strtof(argv[1], &end);
+            if (end == argv[1] || *end)
+                err = "needs a number";
+        }
+        break;
+    case AARGV:
+        if (argc < 2)
+            err = "needs a command";
+        a.v = argv + 1; /* NULL-terminated by servecmd */
+        break;
+    case ADUMP:
+        if (argc != 1)
+            err = "takes no argument";
+        else {
+            dprintf(fd, "ok\n");
+            dump(fd);
+            return;
+        }
+        break;
+    }
+    if (err) {
+        dprintf(fd, "err %s %s\n", commands[i].name, err);
+        return;
+    }
+    syncactivemon();
+    commands[i].func(&a);
+    dprintf(fd, "ok\n");
+}
+
+/* one client: NUL-separated argv until EOF, one reply, close. Clients get a
+ * second to speak or listen so a stuck one cannot stall the WM */
+static void servecmd(void) {
+    struct timeval tv = {1, 0};
+    char buf[4096], *argv[64], *p;
+    ssize_t n, len = 0;
+    int fd, argc = 0;
+
+    if ((fd = accept(sfd, NULL, NULL)) < 0)
+        return;
+    fcntl(fd, F_SETFD, FD_CLOEXEC); /* spawn's children must not hold it */
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+    while ((n = read(fd, buf + len, sizeof buf - 1 - len)) > 0)
+        len += n;
+    if (len && buf[len - 1] == '\n')
+        len--; /* a line from socat works too */
+    buf[len] = '\0';
+    for (p = buf; p < buf + len && argc < (int)LENGTH(argv) - 1;
+         p += strlen(p) + 1)
+        argv[argc++] = p;
+    argv[argc] = NULL;
+    runcmd(fd, argc, argv);
+    close(fd);
+}
+
+static void initsock(void) {
+    struct sockaddr_un sa = {.sun_family = AF_UNIX};
+
+    if (!sockpath(sa.sun_path, sizeof sa.sun_path))
+        die("hwm: DISPLAY not set");
+    if ((sfd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0)
+        die("hwm: cannot create socket");
+    unlink(sa.sun_path); /* a stale one: the WM check already ensures we are
+                            alone on this display */
+    if (bind(sfd, (struct sockaddr *)&sa, sizeof sa) < 0 || listen(sfd, 8) < 0)
+        die("hwm: cannot listen on control socket");
+    strcpy(sockfile, sa.sun_path);
+}
+
+/* `hwm send`: the client side of the protocol above */
+static void usage(void) {
+    size_t i;
+
+    fprintf(stderr, "usage: hwm [-v] | hwm send COMMAND [ARG...] | hwm dump\n"
+                    "commands:\n");
+    for (i = 0; i < LENGTH(commands); i++)
+        fprintf(stderr, "  %-12s %-7s %s\n", commands[i].name,
+                argnames[commands[i].type], commands[i].help);
+    exit(2);
+}
+
+static int sendcmd(int argc, char **argv) {
+    struct sockaddr_un sa = {.sun_family = AF_UNIX};
+    char *reply = NULL, buf[4096];
+    ssize_t n;
+    size_t i;
+    int fd;
+
+    if (argc < 1)
+        usage();
+    for (i = 0; i < LENGTH(commands); i++)
+        if (!strcmp(commands[i].name, argv[0]))
+            break;
+    if (i == LENGTH(commands)) {
+        fprintf(stderr, "hwm: unknown command %s\n", argv[0]);
+        usage();
+    }
+    if (!sockpath(sa.sun_path, sizeof sa.sun_path))
+        die("hwm: DISPLAY not set");
+    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0 ||
+        connect(fd, (struct sockaddr *)&sa, sizeof sa) < 0) {
+        fprintf(stderr, "hwm: cannot connect to %s: is hwm running on %s?\n",
+                sa.sun_path, getenv("DISPLAY"));
+        return 1;
+    }
+    for (i = 0; i < (size_t)argc; i++)
+        if (write(fd, argv[i], strlen(argv[i]) + 1) < 0)
+            die("hwm: write to control socket failed");
+    shutdown(fd, SHUT_WR);
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        size_t len = arrlen(reply);
+
+        arrsetlen(reply, len + (size_t)n);
+        memcpy(reply + len, buf, (size_t)n);
+    }
+    arrput(reply, '\0');
+    close(fd);
+    if (!strncmp(reply, "ok\n", 3)) {
+        fputs(reply + 3, stdout);
+        return 0;
+    }
+    fprintf(stderr, "hwm: %s",
+            strncmp(reply, "err ", 4) ? "bad reply\n" : reply + 4);
+    return 1;
 }
 
 /* event handlers */
@@ -965,6 +1221,7 @@ static void run(void) {
         }
         FD_ZERO(&fds);
         FD_SET(xfd, &fds);
+        FD_SET(sfd, &fds);
         if (gfd >= 0)
             FD_SET(gfd, &fds);
         timeout = 1000;
@@ -973,13 +1230,17 @@ static void run(void) {
         XFlush(dpy); /* the last animation frame must not wait for an event */
         tv.tv_sec = timeout / 1000;
         tv.tv_usec = (timeout % 1000) * 1000;
-        if (select(MAX(xfd, gfd) + 1, &fds, NULL, NULL, &tv) < 0) {
+        if (select(MAX(MAX(xfd, gfd), sfd) + 1, &fds, NULL, NULL, &tv) < 0) {
             if (errno == EINTR)
                 continue;
             die("hwm: select failed");
         }
         if (gfd >= 0 && FD_ISSET(gfd, &fds)) {
             gestureevents();
+            XFlush(dpy);
+        }
+        if (FD_ISSET(sfd, &fds)) {
+            servecmd();
             XFlush(dpy);
         }
         if (!FD_ISSET(xfd, &fds))
@@ -992,10 +1253,15 @@ int main(int argc, char *argv[]) {
         printf("hwm %s\n", HWM_VERSION);
         return 0;
     }
+    if (argc >= 2 && !strcmp(argv[1], "send"))
+        return sendcmd(argc - 2, argv + 2);
+    if (argc == 2 && !strcmp(argv[1], "dump"))
+        return sendcmd(1, argv + 1);
     if (argc > 1)
-        die("usage: hwm [-v]");
+        usage();
     initconfig();
     setup();
+    initsock();
     initgestures();
     initselfwatch(argv[0]);
     scan();
@@ -1004,6 +1270,8 @@ int main(int argc, char *argv[]) {
     if (li)
         libinput_unref(li);
     XCloseDisplay(dpy);
+    close(sfd);
+    unlink(sockfile);
     if (dorestart) {
         if (selfpath[0])
             execv(selfpath, argv);

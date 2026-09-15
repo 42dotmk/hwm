@@ -114,7 +114,7 @@ void scrollby(const Arg *arg);    /* .f = scroll delta, fraction of screen */
 void togglefull(const Arg *arg);  /* fullscreen the focused column */
 void togglefloat(const Arg *arg); /* float/tile the focused window */
 void view(const Arg *arg);        /* .i = workspace to show */
-void sendto(const Arg *arg);      /* .i = workspace to send window to */
+void sendws(const Arg *arg);      /* .i = workspace to send window to */
 void movewsmon(
     const Arg *arg); /* .i = -1/+1: move workspace to adjacent monitor */
 

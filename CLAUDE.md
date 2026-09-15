@@ -17,7 +17,7 @@ hwm is a scrollable-column tiling window manager for X11 in the suckless style: 
       DISPLAY=:1 ./hwm &
       DISPLAY=:1 xterm &
 
-  Headless-ish driving: hwm answers EWMH client messages (e.g. `_NET_CURRENT_DESKTOP` to switch workspaces), and `xwininfo`/`xprop`/`xwd` work against the Xephyr display. `xdotool`/`wmctrl`/Xvfb are not installed on this machine.
+  Headless-ish driving: `DISPLAY=:1 ./hwm send <command> [arg]` runs any bindable command in the nested hwm and `DISPLAY=:1 ./hwm dump` prints its whole model (monitors, workspaces, columns, windows with geometry and focus), which is the way to assert on shell-side behaviour. hwm also answers EWMH client messages (e.g. `_NET_CURRENT_DESKTOP` to switch workspaces), and `xwininfo`/`xprop`/`xwd` work against the Xephyr display. `xdotool`/`wmctrl`/Xvfb are not installed on this machine.
 
 **Live restart:** a running hwm watches its own binary (`checkself()`) and re-execs itself a couple of seconds after `make` replaces it. If you rebuild while the user's session runs this WM, the new code goes live immediately — windows are re-adopted but the arrangement resets. Mod+Shift+r forces a restart.
 
@@ -26,7 +26,7 @@ hwm is a scrollable-column tiling window manager for X11 in the suckless style: 
 Two layers, strictly separated (the same split as hterm's `term.c` / `main.c`):
 
 - **`layout.c` / `layout.h`** — the layout core: the Workspace/Column/Client model, monitors, scrolling and its animation, placement memory, and every layout command (`focushorz` … `movewsmon`). It has **no X11 dependency** (only libc) — that is what makes `test_layout.c` possible. It talks to the window system only through the six callbacks in `LayoutOps` (`apply` geometry+border, `raise`, `focus`, `desktop`, `warp`, `now`), installed by `layoutinit()`. `Client.win` is an opaque `unsigned long` handle. The model globals (`wss`, `curws`, `clients`, `mons`) are shared with the shell, dwm-style. Keep it that way: anything Xlib-flavored belongs in `hwm.c`.
-- **`hwm.c`** — the X11 shell: window adoption (`adopt()` reads WM_CLASS, window type, transient/fixed-size hints, then calls the core's `manage()`), the `LayoutOps` implementations, EWMH properties, RandR → `setmons()`, key/button grabs and the drag loop, libinput gestures, the self-watch, and the event loop. Shell-only commands (`killclient`, `spawn`, `quit`, `restart`, `dragscroll`, `dragwidth`) live here.
+- **`hwm.c`** — the X11 shell: window adoption (`adopt()` reads WM_CLASS, window type, transient/fixed-size hints, then calls the core's `manage()`), the `LayoutOps` implementations, EWMH properties, RandR → `setmons()`, key/button grabs and the drag loop, libinput gestures, the self-watch, the control socket, and the event loop. Shell-only commands (`killclient`, `spawn`, `quit`, `restart`, `dragscroll`, `dragwidth`) live here.
 - `config.h` (user configuration, included by `hwm.c`) and `hwm.h` (Key/Button types, shell commands, shell config declarations; includes `layout.h`, which declares the config the core reads). `vendor/stb_ds.h` supplies dynamic arrays (`arrput`/`arrdel`/`arrlen`); its implementation is compiled into `layout.c` with `erealloc` as allocator.
 - `test_layout.c` — a fake shell (records applied geometry per window, counts focus/raise/warp calls, fake clock) plus `CHECK()` assertions, hterm-style. It defines the core's config globals itself, so it never includes `config.h`.
 
@@ -43,8 +43,9 @@ Non-obvious mechanics:
 - **Click-to-focus** works by sync-grabbing the first button press on unfocused windows and replaying it (`grabbuttons()`/`buttonpress()`).
 - **X errors** from vanished windows are deliberately swallowed in `xerror()`, dwm-style.
 - Just enough EWMH is advertised for rofi/pagers: `_NET_CLIENT_LIST`, `_NET_ACTIVE_WINDOW`, `_NET_CURRENT_DESKTOP`, `_NET_WM_DESKTOP`.
+- **Control socket**: `commands[]` in `hwm.c` names every bindable command with its argument type (`ANONE`/`AINT`/`AFLOAT`/`AARGV`, plus `ADUMP` for the one query) and is the whole command surface. hwm listens on `$XDG_RUNTIME_DIR/hwm$DISPLAY.sock` (`initsock()`, an fd in `run()`'s `select()`); `servecmd()` reads one client's NUL-separated argv until EOF, `runcmd()` validates, calls `syncactivemon()` (so it acts where the pointer is, like a keypress) and the command, and replies `ok\n` + payload or `err <why>\n`, then closes. `hwm send`/`hwm dump` is the same binary in client mode (`sendcmd()`), which validates the command name locally before connecting. Accepted fds are `FD_CLOEXEC` so `spawn`'s children don't hold the client open, and get 1 s socket timeouts so a stuck client can't stall the WM. The layout command that sends a window to a workspace is `sendws`, not `sendto`: that name is libc's.
 
-Adding a user-facing command: implement `void name(const Arg *arg)` in `layout.c` if it only touches the model (declare it in `layout.h`, add a test), or in `hwm.c` if it needs X (declare it in `hwm.h`); either way a one-line comment at the declaration, then bind it in `config.h`. The key/button/width/autostart tables are stb_ds arrays assembled in `initconfig()` (which must run before `setup()`), so bindings can be generated in loops — the per-workspace keys are.
+Adding a user-facing command: implement `void name(const Arg *arg)` in `layout.c` if it only touches the model (declare it in `layout.h`, add a test), or in `hwm.c` if it needs X (declare it in `hwm.h`); either way a one-line comment at the declaration, then bind it in `config.h` and add it to `commands[]` so `hwm send` reaches it. The key/button/width/autostart tables are stb_ds arrays assembled in `initconfig()` (which must run before `setup()`), so bindings can be generated in loops — the per-workspace keys are.
 
 ## Style
 

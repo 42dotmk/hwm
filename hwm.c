@@ -195,8 +195,8 @@ static void xfocus(Client *c) {
     }
     for (j = 0; j < arrlen(clients); j++) {
         i = clients[j];
-        if (i->ws != curws)
-            continue;
+        if (wsmon(i->ws)->ws != i->ws)
+            continue; /* every visible workspace: one focused border in all */
         XSetWindowBorder(dpy, i->win, i == c ? focuspx : unfocuspx);
         grabbuttons(i, i == c);
     }
@@ -615,14 +615,21 @@ static void enternotify(XEvent *e) {
     XCrossingEvent *ev = &e->xcrossing;
     Client *c;
 
-    if (!focusfollowsmouse)
-        return;
     if ((ev->mode != NotifyNormal || ev->detail == NotifyInferior) &&
         ev->window != root)
         return;
     c = findclient(ev->window);
-    if (c && c != focused())
-        focus(c);
+    if (!c)
+        return;
+    if (focusfollowsmouse) {
+        if (c != focused())
+            focus(c);
+    } else if (c->ws != curws && wsmon(c->ws)->ws == c->ws) {
+        /* crossing onto another monitor still makes it the active one: its
+         * workspace and selection take over, the old monitor's window lets go
+         */
+        syncmon(wss[c->ws].mon);
+    }
 }
 
 static void focusin(XEvent *e) {

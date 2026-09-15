@@ -9,7 +9,8 @@ const unsigned int borderpx = 2; /* window border width in px */
 const unsigned int gappx = 6; /* decoration: empty space around every window */
 const char col_focus[] = "#7aa2f7";   /* focused border color */
 const char col_unfocus[] = "#3b4261"; /* unfocused border color */
-const int focusfollowsmouse = 0;
+const int focusfollowsmouse = 0; /* the window under the pointer takes focus;
+                                    off, the pointer still picks the monitor */
 const unsigned int scrollanimms =
     200; /* scroll animation duration in ms; 0 disables */
 
@@ -43,24 +44,47 @@ static const char *termcmd[] = {"hterm", NULL};
 static const char *menucmd[] = {"hmenu", NULL};
 static const char *passcmd[] = {"hmenu", "pass", NULL};
 static const char *switchercmd[] = {"hws", NULL};
-static const char *tmuxcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htmux", "hterm", "-e", "tmux", "new-session", "-A", "-s", "main", NULL};
-static const char *mailcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail", NULL};
-static const char *todocmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e", "hed", "/home/halicea/org/todo.md", NULL};
-static const char *browsercmd[] = {"hmenu", "hist", NULL}; /* history + search */
+static const char *tmuxcmd[] = {"env",   "SDL_VIDEO_X11_WMCLASS=htmux",
+                                "hterm", "-e",
+                                "tmux",  "new-session",
+                                "-A",    "-s",
+                                "main",  NULL};
+static const char *mailcmd[] = {
+    "env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail",
+    NULL};
+static const char *todocmd[] = {
+    "env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e",
+    "hed", "/home/halicea/org/todo.md",   NULL};
+static const char *browsercmd[] = {"hmenu", "hist",
+                                   NULL};               /* history + search */
 static const char *privatecmd[] = {"hweb", "-p", NULL}; /* private window */
-static const char *filescmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
-static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
-static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
-static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
+static const char *filescmd[] = {
+    "env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
+static const char *guidelinescmd[] = {
+    "sh", "-c",
+    "cd /home/halicea/projects/cc/cc-guidelines && "
+    "SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed",
+    NULL};
+static const char *orgcmd[] = {
+    "sh", "-c",
+    "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed",
+    NULL};
+static const char *calcmd[] = {"hweb", "--class=hweb-calendar",
+                               "https://calendar.google.com",
+                               NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
 static const char *talkcmd[] = {"hai", "talk", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
-static const char *volupcmd[] = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
-static const char *voldowncmd[] = {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
-static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL};
-static const char *micmutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
+static const char *volupcmd[] = {
+    "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
+static const char *voldowncmd[] = {"wpctl", "set-volume",
+                                   "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
+static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@",
+                                "toggle", NULL};
+static const char *micmutecmd[] = {"wpctl", "set-mute",
+                                   "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
 static const char *briupcmd[] = {"brightnessctl", "set", "10%+", NULL};
 static const char *bridowncmd[] = {"brightnessctl", "set", "10%-", NULL};
 static const char *playcmd[] = {"playerctl", "play-pause", NULL};
@@ -83,7 +107,7 @@ static const Key basekeys[] = {
     {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
     {MODKEY, XK_n, spawn, {.v = orgcmd}},
     {MODKEY, XK_v, spawn, {.v = dictcmd}},
-    {MODKEY | ShiftMask, XK_v, spawn, {.v = talkcmd}},
+    {MODKEY | Mod1Mask, XK_space, spawn, {.v = talkcmd}},
     {MODKEY, XK_z, spawn, {.v = traycmd}},
     {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
     {MODKEY, XK_Escape, spawn, {.v = lockcmd}},
@@ -136,8 +160,7 @@ static const Button basebuttons[] = {
 /* run with `sh -c` when hwm starts, including after a reload —
  * keep these idempotent or guard them (e.g. `pgrep x || x`) */
 static const char *autostartcmds[] = {
-    "pgrep -x hbg || hbg",
-    "htray", "hnd", "picom",
+    "pgrep -x hbg || hbg", "htray", "hnd",
     /* lock after 10 min idle (xset s) and on DPMS/suspend via xss-lock */
     "xset s 600 600", "pgrep -x xss-lock || xss-lock -- slock &",
     "setxkbmap -layout us,mk -option '' -option caps:escape -option "
@@ -145,7 +168,7 @@ static const char *autostartcmds[] = {
     "xset q | grep -q '.local/share/fonts' || { xset +fp "
     "$HOME/.local/share/fonts; xset fp rehash; }",
     "pipewire",
-    "pgrep -x haid || haid"
+    "pgrep -x hsmd || hsmd" /* the session services: haid, see hai/sv */
 
 };
 

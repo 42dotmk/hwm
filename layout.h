@@ -121,11 +121,9 @@ void movewsmon(
 /* configuration the layout reads, defined in config.h (or by the tests) */
 extern const unsigned int borderpx;
 extern const unsigned int gappx;
-extern const unsigned int
-    scrollanimms; /* scroll animation duration in ms; 0 disables */
+extern const unsigned int scrollanimms; /* scroll animation duration in ms; 0 disables */
 extern const float defwidth;
-extern const float
-    floatsize; /* size of newly floated windows, fraction of monitor */
+extern const float floatsize; /* size of newly floated windows, fraction of monitor */
 extern const int preservelayout; /* reopen apps where they were last placed */
 extern const char layoutfile[];  /* where placements are kept; ~ is $HOME */
 extern float *widths;            /* stb_ds array */

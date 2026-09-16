@@ -133,6 +133,8 @@ static const Key basekeys[] = {
     {MODKEY, XK_equal, growwidth, {.f = +0.05f}},
     {MODKEY, XK_f, togglefull, {0}},
     {MODKEY | ShiftMask, XK_space, togglefloat, {0}},
+    {0, XK_Super_L, movefloat, {0}},         /* hold Super: move the float under the pointer */
+    {ShiftMask, XK_Super_L, movefloat, {0}}, /* hold Super+Shift: resize it */
     {MODKEY, XK_bracketleft, scrollby, {.f = -0.25f}},
     {MODKEY, XK_bracketright, scrollby, {.f = +0.25f}},
     {MODKEY, XK_comma, movewsmon, {.i = -1}},

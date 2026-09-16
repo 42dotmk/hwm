@@ -35,6 +35,8 @@ void quit(const Arg *arg);
 void restart(const Arg *arg);    /* exec ourselves; picks up a rebuilt binary */
 void dragscroll(const Arg *arg); /* mouse: drag the strip */
 void dragwidth(const Arg *arg);  /* mouse: resize the focused column */
+void movefloat(const Arg *arg);  /* key held: move (+Shift: resize) the float
+                                    under the pointer */
 
 /* configuration, defined in config.h; the pointers are stb_ds arrays built
  * by initconfig(), which must run before setup(); length via arrlen() */

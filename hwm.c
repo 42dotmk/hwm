@@ -113,6 +113,7 @@ static const char *atomnames[AtomLast] = {
 };
 static Atom atoms[AtomLast];
 static Client *pressclient; /* client under the most recent button press */
+static KeyCode presskey;    /* key of the most recent grabbed key press */
 static Window checkwin;
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 
@@ -560,6 +561,88 @@ void dragwidth(const Arg *arg) {
         drag(DragWidth);
 }
 
+/* the managed top-level under the pointer, if any */
+static Client *ptrclient(void) {
+    Window dummy, child;
+    int di;
+    unsigned int dui;
+
+    if (!XQueryPointer(dpy, root, &dummy, &child, &di, &di, &di, &di, &dui))
+        return NULL;
+    return findclient(child);
+}
+
+/* bound to a bare modifier key: while it is held, the float under the
+ * pointer follows the pointer; with Shift held too, the pointer resizes it
+ * instead (right/down grow, left/up shrink). The grabbed key press leaves
+ * the keyboard grabbed until that key's release, so key presses meanwhile
+ * still reach us and are dispatched as usual (Super+j keeps working
+ * mid-move, and Shift can join or leave the hold at any point). A dead
+ * zone keeps the float from creeping when the pointer twitches during
+ * ordinary Super+key chords; a button press ends the hold, so Super+drag
+ * and Super+wheel stay available on top of it. */
+void movefloat(const Arg *arg) {
+    Client *c = ptrclient();
+    KeyCode key = presskey;
+    int rx, ry, dx, dy, x = 0, y = 0, w = 0, h = 0, moving = 0, resize = -1;
+    Window win;
+    Time last = 0;
+    XEvent ev;
+
+    (void)arg;
+    if (!c || !c->isfloating || !getrootptr(&rx, &ry))
+        return;
+    win = c->win;
+    if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
+                     None, None, CurrentTime) != GrabSuccess)
+        return;
+    wss[c->ws].animating = 0;
+    for (;;) {
+        XMaskEvent(dpy,
+                   MOUSEMASK | KeyPressMask | KeyReleaseMask |
+                       SubstructureRedirectMask,
+                   &ev);
+        if (ev.type == ButtonPress ||
+            (ev.type == KeyRelease && ev.xkey.keycode == key))
+            break;
+        if (ev.type == KeyRelease)
+            continue;
+        if (ev.type != MotionNotify) {
+            handler[ev.type](&ev);
+            if (!(c = findclient(win)) || !c->isfloating)
+                break;
+            continue;
+        }
+        if (ev.xmotion.time - last < 1000 / 60)
+            continue;
+        last = ev.xmotion.time;
+        if (resize != !!(ev.xmotion.state & ShiftMask)) {
+            /* mode (re)starts from the current geometry and pointer */
+            resize = !!(ev.xmotion.state & ShiftMask);
+            rx = ev.xmotion.x_root;
+            ry = ev.xmotion.y_root;
+            x = c->x;
+            y = c->y;
+            w = c->w;
+            h = c->h;
+        }
+        dx = ev.xmotion.x_root - rx;
+        dy = ev.xmotion.y_root - ry;
+        if (!moving && abs(dx) < 8 && abs(dy) < 8)
+            continue;
+        if (!moving) {
+            moving = 1;
+            if (c != focused())
+                focus(c);
+        }
+        if (resize)
+            moveresize(c, x, y, MAX(50, w + dx), MAX(50, h + dy));
+        else
+            moveresize(c, x + dx, y + dy, w, h);
+    }
+    XUngrabPointer(dpy, CurrentTime);
+}
+
 /* the control socket */
 
 /* the model as text, one object per line: mon, ws, col, win, float. Hidden
@@ -901,6 +984,7 @@ static void keypress(XEvent *e) {
     ptrdiff_t i;
 
     syncactivemon();
+    presskey = (KeyCode)ev->keycode;
     for (i = 0; i < arrlen(keys); i++)
         if (keysym == keys[i].keysym && keys[i].func &&
             CLEANMASK(keys[i].mod) == CLEANMASK(ev->state))

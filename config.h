@@ -43,48 +43,28 @@ const char **autostart;
 static const char *termcmd[] = {"hterm", NULL};
 static const char *menucmd[] = {"hmenu", NULL};
 static const char *passcmd[] = {"hmenu", "pass", NULL};
+static const char *pkgcmd[] = {"hmenu", "xbps", NULL}; /* search/install packages */
+static const char *keyscmd[] = {"hmenu", "keys", NULL}; /* this list, as a cheat sheet */
 static const char *switchercmd[] = {"hws", NULL};
-static const char *tmuxcmd[] = {"env",   "SDL_VIDEO_X11_WMCLASS=htmux",
-                                "hterm", "-e",
-                                "tmux",  "new-session",
-                                "-A",    "-s",
-                                "main",  NULL};
-static const char *mailcmd[] = {
-    "env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail",
-    NULL};
-static const char *todocmd[] = {
-    "env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e",
-    "hed", "/home/halicea/org/todo.md",   NULL};
-static const char *browsercmd[] = {"hmenu", "hist",
-                                   NULL};               /* history + search */
+static const char *tmuxcmd[] = {"env",   "SDL_VIDEO_X11_WMCLASS=htmux", "hterm", "-e", "tmux",  "new-session", "-A",    "-s", "main",  NULL};
+static const char *mailcmd[] = { "env", "SDL_VIDEO_X11_WMCLASS=hmail", "hterm", "-e", "hed", "-c", "mail", NULL};
+static const char *todocmd[] = { "env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", "-e", "hed", "/home/halicea/org/todo.md",   NULL};
+static const char *browsercmd[] = {"hmenu", "hist", NULL};               /* history + search */
 static const char *privatecmd[] = {"hweb", "-p", NULL}; /* private window */
-static const char *filescmd[] = {
-    "env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
-static const char *guidelinescmd[] = {
-    "sh", "-c",
-    "cd /home/halicea/projects/cc/cc-guidelines && "
-    "SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed",
-    NULL};
-static const char *orgcmd[] = {
-    "sh", "-c",
-    "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed",
-    NULL};
-static const char *calcmd[] = {"hweb", "--class=hweb-calendar",
-                               "https://calendar.google.com",
-                               NULL}; /* GTK option: own WM_CLASS */
+static const char *filescmd[] = { "env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
+static const char *aicmd[] = {"hterm", "-e", "hai", "-s" , "main", NULL};
+static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && " "SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
+static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
+static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
 static const char *dictcmd[] = {"hstt", NULL};
 static const char *talkcmd[] = {"hai", "talk", NULL};
 static const char *lockcmd[] = {"slock", NULL};
 static const char *traycmd[] = {"pkill", "-USR1", "-x", "htray", NULL};
 static const char *trayinputcmd[] = {"pkill", "-USR2", "-x", "htray", NULL};
-static const char *volupcmd[] = {
-    "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
-static const char *voldowncmd[] = {"wpctl", "set-volume",
-                                   "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
-static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@",
-                                "toggle", NULL};
-static const char *micmutecmd[] = {"wpctl", "set-mute",
-                                   "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
+static const char *volupcmd[] = { "wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+", NULL};
+static const char *voldowncmd[] = {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", NULL};
+static const char *mutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL};
+static const char *micmutecmd[] = {"wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle", NULL};
 static const char *briupcmd[] = {"brightnessctl", "set", "10%+", NULL};
 static const char *bridowncmd[] = {"brightnessctl", "set", "10%-", NULL};
 static const char *playcmd[] = {"playerctl", "play-pause", NULL};
@@ -92,63 +72,66 @@ static const char *nextcmd[] = {"playerctl", "next", NULL};
 static const char *prevcmd[] = {"playerctl", "previous", NULL};
 
 static const Key basekeys[] = {
-    /* modifier            key             function     argument */
-    {MODKEY, XK_Return, spawn, {.v = termcmd}},
-    {MODKEY, XK_space, spawn, {.v = menucmd}},
-    {MODKEY, XK_p, spawn, {.v = passcmd}},
-    {MODKEY, XK_Tab, spawn, {.v = switchercmd}},
-    {MODKEY, XK_b, spawn, {.v = browsercmd}},
-    {MODKEY | ShiftMask, XK_b, spawn, {.v = privatecmd}},
-    {MODKEY, XK_e, spawn, {.v = filescmd}},
-    {MODKEY | ShiftMask, XK_Return, spawn, {.v = tmuxcmd}},
-    {MODKEY, XK_m, spawn, {.v = mailcmd}},
-    {MODKEY, XK_c, spawn, {.v = calcmd}},
-    {MODKEY, XK_t, spawn, {.v = todocmd}},
-    {MODKEY, XK_g, spawn, {.v = guidelinescmd}},
-    {MODKEY, XK_n, spawn, {.v = orgcmd}},
-    {MODKEY, XK_v, spawn, {.v = dictcmd}},
-    {MODKEY | Mod1Mask, XK_space, spawn, {.v = talkcmd}},
-    {MODKEY, XK_z, spawn, {.v = traycmd}},
-    {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}},
-    {MODKEY, XK_Escape, spawn, {.v = lockcmd}},
-    {MODKEY, XK_q, killclient, {0}},
-    {MODKEY | ShiftMask, XK_e, quit, {0}},
-    {MODKEY | ShiftMask, XK_r, restart, {0}},
+    /* modifier            key             function     argument  [description] */
+    {MODKEY, XK_Return, spawn, {.v = termcmd}, "terminal"},
+    {MODKEY, XK_space, spawn, {.v = menucmd}, "launcher (windows, apps, commands)"},
+    {MODKEY, XK_p, spawn, {.v = passcmd}, "password store"},
+    {MODKEY, XK_i, spawn, {.v = pkgcmd}, "search / install packages"},
+    {MODKEY, XK_slash, spawn, {.v = keyscmd}, "key bindings cheat sheet"},
+    {MODKEY, XK_Tab, spawn, {.v = switchercmd}, "workspace overview"},
+    {MODKEY, XK_b, spawn, {.v = browsercmd}, "browser: history and web search"},
+    {MODKEY | ShiftMask, XK_b, spawn, {.v = privatecmd}, "private browser window"},
+    {MODKEY, XK_e, spawn, {.v = filescmd}, "file manager"},
+    {MODKEY | ShiftMask, XK_Return, spawn, {.v = tmuxcmd}, "tmux session"},
+    {MODKEY, XK_a, spawn, {.v = aicmd}, "hai session"},
+    {MODKEY, XK_m, spawn, {.v = mailcmd}, "mail"},
+    {MODKEY, XK_c, spawn, {.v = calcmd}, "calendar"},
+    {MODKEY, XK_t, spawn, {.v = todocmd}, "todo list"},
+    {MODKEY, XK_g, spawn, {.v = guidelinescmd}, "cc guidelines"},
+    {MODKEY, XK_n, spawn, {.v = orgcmd}, "org notes"},
+    {MODKEY, XK_v, spawn, {.v = dictcmd}, "dictate (speech to text)"},
+    {MODKEY | Mod1Mask, XK_space, spawn, {.v = talkcmd}, "talk to hai"},
+    {MODKEY, XK_z, spawn, {.v = traycmd}, "toggle the tray"},
+    {MODKEY | ShiftMask, XK_z, spawn, {.v = trayinputcmd}, "tray input"},
+    {MODKEY, XK_Escape, spawn, {.v = lockcmd}, "lock the screen"},
+    {MODKEY, XK_q, killclient, {0}, "close the focused window"},
+    {MODKEY | ShiftMask, XK_e, quit, {0}, "exit hwm"},
+    {MODKEY | ShiftMask, XK_r, restart, {0}, "restart hwm"},
 
-    {MODKEY, XK_h, focushorz, {.i = -1}},
-    {MODKEY, XK_l, focushorz, {.i = +1}},
-    {MODKEY, XK_k, focusvert, {.i = -1}},
-    {MODKEY, XK_j, focusvert, {.i = +1}},
+    {MODKEY, XK_h, focushorz, {.i = -1}, "focus the column to the left"},
+    {MODKEY, XK_l, focushorz, {.i = +1}, "focus the column to the right"},
+    {MODKEY, XK_k, focusvert, {.i = -1}, "focus the window above"},
+    {MODKEY, XK_j, focusvert, {.i = +1}, "focus the window below"},
 
-    {MODKEY | ShiftMask, XK_h, movehorz, {.i = -1}},
-    {MODKEY | ShiftMask, XK_l, movehorz, {.i = +1}},
-    {MODKEY | ShiftMask, XK_k, movevert, {.i = -1}},
-    {MODKEY | ShiftMask, XK_j, movevert, {.i = +1}},
+    {MODKEY | ShiftMask, XK_h, movehorz, {.i = -1}, "move the window/column left"},
+    {MODKEY | ShiftMask, XK_l, movehorz, {.i = +1}, "move the window/column right"},
+    {MODKEY | ShiftMask, XK_k, movevert, {.i = -1}, "move the window up in its column"},
+    {MODKEY | ShiftMask, XK_j, movevert, {.i = +1}, "move the window down in its column"},
 
-    {MODKEY | ControlMask, XK_h, stackto, {.i = -1}},
-    {MODKEY | ControlMask, XK_l, stackto, {.i = +1}},
+    {MODKEY | ControlMask, XK_h, stackto, {.i = -1}, "stack the window into the column on the left"},
+    {MODKEY | ControlMask, XK_l, stackto, {.i = +1}, "stack the window into the column on the right"},
 
-    {MODKEY, XK_r, cyclewidth, {0}},
-    {MODKEY, XK_minus, growwidth, {.f = -0.05f}},
-    {MODKEY, XK_equal, growwidth, {.f = +0.05f}},
-    {MODKEY, XK_f, togglefull, {0}},
-    {MODKEY | ShiftMask, XK_space, togglefloat, {0}},
-    {0, XK_Super_L, movefloat, {0}},         /* hold Super: move the float under the pointer */
-    {ShiftMask, XK_Super_L, movefloat, {0}}, /* hold Super+Shift: resize it */
-    {MODKEY, XK_bracketleft, scrollby, {.f = -0.25f}},
-    {MODKEY, XK_bracketright, scrollby, {.f = +0.25f}},
-    {MODKEY, XK_comma, movewsmon, {.i = -1}},
-    {MODKEY, XK_period, movewsmon, {.i = +1}},
+    {MODKEY, XK_r, cyclewidth, {0}, "cycle the column width through the presets"},
+    {MODKEY, XK_minus, growwidth, {.f = -0.05f}, "narrow the column"},
+    {MODKEY, XK_equal, growwidth, {.f = +0.05f}, "widen the column"},
+    {MODKEY, XK_f, togglefull, {0}, "fullscreen the column"},
+    {MODKEY | ShiftMask, XK_space, togglefloat, {0}, "float / tile the window"},
+    {0, XK_Super_L, movefloat, {0}, "hold: move the float under the pointer"},
+    {ShiftMask, XK_Super_L, movefloat, {0}, "hold: resize the float under the pointer"},
+    {MODKEY, XK_bracketleft, scrollby, {.f = -0.25f}, "scroll the strip left"},
+    {MODKEY, XK_bracketright, scrollby, {.f = +0.25f}, "scroll the strip right"},
+    {MODKEY, XK_comma, movewsmon, {.i = -1}, "move the workspace to the monitor on the left"},
+    {MODKEY, XK_period, movewsmon, {.i = +1}, "move the workspace to the monitor on the right"},
 
-    {0, XF86XK_AudioRaiseVolume, spawn, {.v = volupcmd}},
-    {0, XF86XK_AudioLowerVolume, spawn, {.v = voldowncmd}},
-    {0, XF86XK_AudioMute, spawn, {.v = mutecmd}},
-    {0, XF86XK_AudioMicMute, spawn, {.v = micmutecmd}},
-    {0, XF86XK_MonBrightnessUp, spawn, {.v = briupcmd}},
-    {0, XF86XK_MonBrightnessDown, spawn, {.v = bridowncmd}},
-    {0, XF86XK_AudioPlay, spawn, {.v = playcmd}},
-    {0, XF86XK_AudioNext, spawn, {.v = nextcmd}},
-    {0, XF86XK_AudioPrev, spawn, {.v = prevcmd}},
+    {0, XF86XK_AudioRaiseVolume, spawn, {.v = volupcmd}, "volume up"},
+    {0, XF86XK_AudioLowerVolume, spawn, {.v = voldowncmd}, "volume down"},
+    {0, XF86XK_AudioMute, spawn, {.v = mutecmd}, "mute"},
+    {0, XF86XK_AudioMicMute, spawn, {.v = micmutecmd}, "mute the microphone"},
+    {0, XF86XK_MonBrightnessUp, spawn, {.v = briupcmd}, "brightness up"},
+    {0, XF86XK_MonBrightnessDown, spawn, {.v = bridowncmd}, "brightness down"},
+    {0, XF86XK_AudioPlay, spawn, {.v = playcmd}, "play / pause"},
+    {0, XF86XK_AudioNext, spawn, {.v = nextcmd}, "next track"},
+    {0, XF86XK_AudioPrev, spawn, {.v = prevcmd}, "previous track"},
 };
 
 static const Button basebuttons[] = {
@@ -201,11 +184,12 @@ void initconfig(void) {
     /* Mod+Ctrl+N sets the column width to the Nth preset
      * (not Mod+Shift+N: that already sends the window to workspace N) */
     SETKEYS(widthpresets, MODKEY | ControlMask, XK_1, setwidth,
-            {.f = widthpresets[i]});
+            {.f = widthpresets[i]}, "set the column width to preset N");
     /* Mod+N views workspace N, Mod+Shift+N sends the focused window there */
     for (i = 0; i < nworkspaces; i++) {
-        arrput(keys, ((Key){MODKEY, XK_0 + i, view, {.i = (int)i}}));
-        arrput(keys,
-               ((Key){MODKEY | ShiftMask, XK_0 + i, sendws, {.i = (int)i}}));
+        arrput(keys, ((Key){MODKEY, XK_0 + i, view, {.i = (int)i},
+                            "show workspace N"}));
+        arrput(keys, ((Key){MODKEY | ShiftMask, XK_0 + i, sendws,
+                            {.i = (int)i}, "send the window to workspace N"}));
     }
 }

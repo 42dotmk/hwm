@@ -50,6 +50,7 @@ Everything a key can do, `hwm send` can do too, over a unix socket at
     hwm send spawn hterm -e htop
     hwm send                    # lists the commands
     hwm dump                    # monitors, workspaces, columns, windows
+    hwm keys                    # the key bindings with what they do
 
 `dump` prints one object per line (`mon`, `ws`, `col`, `win`, `float`) with
 `key=value` fields and `sel`/`focused`/`visible`/`current` flags, for `awk`.

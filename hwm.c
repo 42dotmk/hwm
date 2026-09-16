@@ -132,9 +132,9 @@ static void (*handler[LASTEvent])(XEvent *) = {
 };
 
 /* the command surface: what `hwm send` can ask for, by name. Every entry is
- * a binding target from config.h plus how its argument is spelled; dump is
- * the one query. Add here when adding a command */
-enum { ANONE, AINT, AFLOAT, AARGV, ADUMP };
+ * a binding target from config.h plus how its argument is spelled; dump and
+ * keys are the queries. Add here when adding a command */
+enum { ANONE, AINT, AFLOAT, AARGV, ADUMP, AKEYS };
 static const struct {
     const char *name;
     void (*func)(const Arg *);
@@ -160,8 +160,9 @@ static const struct {
     {"restart", restart, ANONE, "re-exec hwm (picks up a rebuilt binary)"},
     {"quit", quit, ANONE, "exit hwm"},
     {"dump", NULL, ADUMP, "print monitors, workspaces, columns and windows"},
+    {"keys", NULL, AKEYS, "print the key bindings with what they do"},
 };
-static const char *argnames[] = {"", "N", "F", "CMD...", ""};
+static const char *argnames[] = {"", "N", "F", "CMD...", "", ""};
 
 /* $XDG_RUNTIME_DIR/hwm<DISPLAY>.sock, so a Xephyr hwm is driven with
  * DISPLAY=:1 like any X client */
@@ -689,6 +690,74 @@ static void dump(int fd) {
     }
 }
 
+/* `hwm keys`: one line per binding, tab-separated - modifiers+key, the
+ * command with its argument spelled so `sh -c "hwm send $cmd"` runs it
+ * (argv words single-quoted where the shell would care), and the
+ * description (Key.desc, else the command's help) */
+static size_t shquote(char *dst, size_t size, const char *s) {
+    size_t n = 0;
+
+    if (*s && !strpbrk(s, " \t\n'\"\\$`&|;<>()*?[]#~"))
+        return (size_t)snprintf(dst, size, " %s", s);
+    n += (size_t)snprintf(dst, size, " '");
+    for (; *s && n + 5 < size; s++)
+        if (*s == '\'')
+            n += (size_t)snprintf(dst + n, size - n, "'\\''");
+        else
+            dst[n++] = *s;
+    n += (size_t)snprintf(dst + n, size - n, "'");
+    return n;
+}
+
+static void dumpkeys(int fd) {
+    static const struct {
+        unsigned int mask;
+        const char *name;
+    } mods[] = {{ControlMask, "Ctrl"},
+                {Mod1Mask, "Alt"},
+                {Mod4Mask, "Super"},
+                {ShiftMask, "Shift"}};
+    char combo[128], cmd[1024];
+    const char *sym;
+    char *const *v;
+    size_t i, j, n;
+
+    for (i = 0; i < (size_t)arrlen(keys); i++) {
+        combo[0] = 0;
+        for (j = 0; j < LENGTH(mods); j++)
+            if (keys[i].mod & mods[j].mask) {
+                strncat(combo, mods[j].name, sizeof combo - strlen(combo) - 1);
+                strncat(combo, "+", sizeof combo - strlen(combo) - 1);
+            }
+        sym = XKeysymToString(keys[i].keysym);
+        strncat(combo, sym ? sym : "?", sizeof combo - strlen(combo) - 1);
+        for (j = 0; j < LENGTH(commands); j++)
+            if (commands[j].func == keys[i].func)
+                break;
+        cmd[0] = 0; /* not a command (movefloat): only its description */
+        n = 0;
+        if (j < LENGTH(commands))
+            n = (size_t)snprintf(cmd, sizeof cmd, "%s", commands[j].name);
+        switch (j < LENGTH(commands) ? commands[j].type : ANONE) {
+        case AINT:
+            snprintf(cmd + n, sizeof cmd - n, " %d", keys[i].arg.i);
+            break;
+        case AFLOAT:
+            snprintf(cmd + n, sizeof cmd - n, " %g", keys[i].arg.f);
+            break;
+        case AARGV:
+            for (v = (char *const *)keys[i].arg.v; *v && n + 8 < sizeof cmd;
+                 v++)
+                n += shquote(cmd + n, sizeof cmd - n, *v);
+            break;
+        }
+        dprintf(fd, "%s\t%s\t%s\n", combo, cmd,
+                keys[i].desc           ? keys[i].desc
+                : j < LENGTH(commands) ? commands[j].help
+                                       : "");
+    }
+}
+
 /* run argv for a client: the reply is "ok" plus any payload, or "err why".
  * Like a keypress, the command acts on the monitor under the pointer */
 static void runcmd(int fd, int argc, char **argv) {
@@ -737,11 +806,15 @@ static void runcmd(int fd, int argc, char **argv) {
         a.v = argv + 1; /* NULL-terminated by servecmd */
         break;
     case ADUMP:
+    case AKEYS:
         if (argc != 1)
             err = "takes no argument";
         else {
             dprintf(fd, "ok\n");
-            dump(fd);
+            if (commands[i].type == ADUMP)
+                dump(fd);
+            else
+                dumpkeys(fd);
             return;
         }
         break;
@@ -799,7 +872,8 @@ static void initsock(void) {
 static void usage(void) {
     size_t i;
 
-    fprintf(stderr, "usage: hwm [-v] | hwm send COMMAND [ARG...] | hwm dump\n"
+    fprintf(stderr, "usage: hwm [-v] | hwm send COMMAND [ARG...] | hwm dump "
+                    "| hwm keys\n"
                     "commands:\n");
     for (i = 0; i < LENGTH(commands); i++)
         fprintf(stderr, "  %-12s %-7s %s\n", commands[i].name,
@@ -1339,7 +1413,7 @@ int main(int argc, char *argv[]) {
     }
     if (argc >= 2 && !strcmp(argv[1], "send"))
         return sendcmd(argc - 2, argv + 2);
-    if (argc == 2 && !strcmp(argv[1], "dump"))
+    if (argc == 2 && (!strcmp(argv[1], "dump") || !strcmp(argv[1], "keys")))
         return sendcmd(1, argv + 1);
     if (argc > 1)
         usage();

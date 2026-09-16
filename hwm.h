@@ -19,6 +19,7 @@ typedef struct {
     KeySym keysym;
     void (*func)(const Arg *);
     Arg arg;
+    const char *desc; /* optional, for `hwm keys`; else the command's help */
 } Key;
 
 typedef struct {

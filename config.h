@@ -41,6 +41,7 @@ const char **autostart;
 /* SDL_VIDEO_X11_WMCLASS gives each hterm role its own WM_CLASS, so
  * preservelayout remembers a place per role rather than one for all hterms */
 static const char *termcmd[] = {"hterm", NULL};
+static const char *scratchcmd[] = {"env", "SDL_VIDEO_X11_WMCLASS=hscratch", "hterm", NULL}; /* floats via `hscratch::-1:` in layoutfile */
 static const char *menucmd[] = {"hmenu", NULL};
 static const char *passcmd[] = {"hmenu", "pass", NULL};
 static const char *pkgcmd[] = {"hmenu", "xbps", NULL}; /* search/install packages */
@@ -52,7 +53,7 @@ static const char *todocmd[] = { "env", "SDL_VIDEO_X11_WMCLASS=htodo", "hterm", 
 static const char *browsercmd[] = {"hmenu", "hist", NULL};               /* history + search */
 static const char *privatecmd[] = {"hweb", "-p", NULL}; /* private window */
 static const char *filescmd[] = { "env", "SDL_VIDEO_X11_WMCLASS=hfiles", "hterm", "-e", "yazi", NULL};
-static const char *aicmd[] = {"hterm", "-e", "hai", "-s" , "main", NULL};
+static const char *aicmd[] = {"hmenu", "--title", "hai agents", "hai tree -m", NULL}; /* the agent tree; Return opens a terminal on one */
 static const char *guidelinescmd[] = { "sh", "-c", "cd /home/halicea/projects/cc/cc-guidelines && " "SDL_VIDEO_X11_WMCLASS=hguidelines exec hterm -e hed", NULL};
 static const char *orgcmd[] = { "sh", "-c", "cd /home/halicea/org && SDL_VIDEO_X11_WMCLASS=hterm-hed exec hterm -e hed", NULL};
 static const char *calcmd[] = {"hweb", "--class=hweb-calendar", "https://calendar.google.com", NULL}; /* GTK option: own WM_CLASS */
@@ -83,7 +84,8 @@ static const Key basekeys[] = {
     {MODKEY | ShiftMask, XK_b, spawn, {.v = privatecmd}, "private browser window"},
     {MODKEY, XK_e, spawn, {.v = filescmd}, "file manager"},
     {MODKEY | ShiftMask, XK_Return, spawn, {.v = tmuxcmd}, "tmux session"},
-    {MODKEY, XK_a, spawn, {.v = aicmd}, "hai session"},
+    {MODKEY | ControlMask, XK_Return, spawn, {.v = scratchcmd}, "floating terminal"},
+    {MODKEY, XK_a, spawn, {.v = aicmd}, "hai agents"},
     {MODKEY, XK_m, spawn, {.v = mailcmd}, "mail"},
     {MODKEY, XK_c, spawn, {.v = calcmd}, "calendar"},
     {MODKEY, XK_t, spawn, {.v = todocmd}, "todo list"},

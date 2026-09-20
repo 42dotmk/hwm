@@ -103,14 +103,20 @@ has a remembered placement (below). Mod+Shift+r forces a restart without
 a rebuild.
 
 With `preservelayout` set, hwm remembers where each app was last placed:
-its workspace, column index and column width, keyed by the WM_CLASS
-class. A new window of that app opens on that workspace, at that column
-index (clamped to the number of columns there), at that width, and hwm
-switches to the workspace. Moving, reordering, resizing or sending a
-window to another workspace updates the record at once. The records live
-in `layoutfile` (`~/.config/hackable/hwm.layout`), one
+its workspace and column width, keyed by the WM_CLASS class. A new window
+of that app opens on that workspace, at that width, to the right of the
+workspace's selected window (last, if nothing is selected), and hwm
+switches to the workspace. Moving, resizing or sending a window to
+another workspace updates the record at once. The records live in
+`layoutfile` (`~/.config/hackable/hwm.layout`), one
 `app:workspace:column:percent` line per app, and the file is read every
-time a window opens, so it can be edited by hand. A line with empty
+time a window opens, so it can be edited by hand. hwm leaves the column
+field empty; a column index written by hand places the window at that
+column (clamped to the number of columns there) when it lands on another
+workspace, and is dropped once the app moves. A column of `-1`
+(`app::-1:` or `app:workspace:-1:`) opens the app floating — `floatsize`
+of the monitor, centered, like `togglefloat` — and hwm never rewrites that
+line either. A line with empty
 workspace and column fields, `app:::` or `app:::percent`, opts an app
 out: it opens wherever you are (at that width, if given) and hwm never
 rewrites its line. Apps that share a

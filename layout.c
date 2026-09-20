@@ -17,11 +17,16 @@
 
 /* a remembered placement, one `app:ws:idx:pct` line of layoutfile. An
  * `app:::pct` line (no workspace, no index) is a pinned width only: the app
- * opens where you are and hwm never rewrites its line */
+ * opens where you are and hwm never rewrites its line. hwm itself records no
+ * index (`app:ws::pct`): the window opens next to that workspace's selection;
+ * a hand-written index places it at that column instead, and a hand-written
+ * -1 opens the app floating (never rewritten either) */
+enum { IDXNONE = -2, IDXFLOAT = -1 };
+
 typedef struct {
     char *app;
     int ws;  /* workspace, -1 = wherever you are */
-    int idx; /* column index, -1 with ws */
+    int idx; /* column index, IDXNONE = next to the selection, IDXFLOAT */
     int pct; /* column width, percent of the screen, 0 = default */
 } Rule;
 
@@ -417,7 +422,7 @@ static int parserule(char *line, Rule *r) {
         return 0;
     r->app = estrdup(line);
     r->ws = *f[0] ? atoi(f[0]) : -1;
-    r->idx = *f[1] ? atoi(f[1]) : -1;
+    r->idx = *f[1] ? MAX(atoi(f[1]), IDXFLOAT) : IDXNONE;
     r->pct = atoi(f[2]);
     return 1;
 }
@@ -478,14 +483,17 @@ static void writelayout(Rule *rules) {
                 fprintf(fp, "%d", rules[i].pct);
             fputc('\n', fp);
         } else {
-            fprintf(fp, "%s:%d:%d:%d\n", rules[i].app, rules[i].ws,
-                    rules[i].idx, rules[i].pct);
+            fprintf(fp, "%s:%d:", rules[i].app, rules[i].ws);
+            if (rules[i].idx != IDXNONE)
+                fprintf(fp, "%d", rules[i].idx);
+            fprintf(fp, ":%d\n", rules[i].pct);
         }
     if (fclose(fp) != 0 || rename(tmp, path) != 0)
         fprintf(stderr, "hwm: cannot write %s\n", path);
 }
 
-/* remember where c sits, so the next window of its app opens there */
+/* remember where c sits, so the next window of its app opens there: the
+ * workspace and width, never the column (for now) */
 void savelayout(Client *c) {
     Rule *rules, *r, n;
 
@@ -493,18 +501,18 @@ void savelayout(Client *c) {
         return;
     n.app = c->app;
     n.ws = (int)c->ws;
-    n.idx = (int)colidx(&wss[c->ws], c->col);
+    n.idx = IDXNONE;
     n.pct = (int)(c->col->width * 100.0f + 0.5f);
     rules = loadlayout();
     r = findrule(rules, c->app);
-    if (r && (r->ws < 0 || /* opens wherever you are: never recorded */
-              (r->ws == n.ws && r->idx == n.idx && r->pct == n.pct))) {
+    if (r && (r->ws < 0 || r->idx == IDXFLOAT || /* hand-written: kept */
+              (r->ws == n.ws && r->pct == n.pct))) {
         freelayout(rules);
         return;
     }
     if (r) {
         r->ws = n.ws;
-        r->idx = n.idx;
+        r->idx = n.idx; /* a hand-written index is stale once it moved */
         r->pct = n.pct;
     } else {
         n.app = estrdup(c->app);
@@ -514,36 +522,37 @@ void savelayout(Client *c) {
     freelayout(rules);
 }
 
-/* tile a new window where its app was last placed, else next to the
- * selection. follow: switch to that workspace (not while adopting windows
- * at startup, which would hop around) */
-static Column *place(Client *c, int follow) {
-    Rule *rules = NULL, *r = NULL;
-    Column *col;
-    Arg a;
+/* the workspace a rule sends its app to, else the current one */
+static size_t rulews(const Rule *r) {
+    return r && r->ws >= 0 && (size_t)r->ws < nworkspaces ? (size_t)r->ws
+                                                          : curws;
+}
 
-    if (c->app) {
-        rules = loadlayout();
-        r = findrule(rules, c->app);
-    }
-    if (r && r->ws >= 0 && (size_t)r->ws < nworkspaces) {
-        if (follow) {
-            a.i = r->ws;
-            view(&a);
-        }
-        col = attachat((size_t)r->ws,
-                       MIN(MAX(r->idx, 0), arrlen(wss[r->ws].cols)), c);
-    } else {
-        col = attachnew(curws, curwsp()->selcol, c);
-    }
+/* tile a new window on workspace wi, to the right of its selection, last
+ * if nothing is selected; a rule's column index counts only when landing
+ * on another workspace */
+static Column *place(Client *c, const Rule *r, size_t wi) {
+    Column *col;
+
+    if (wi != curws && r && r->idx >= 0)
+        col = attachat(wi, MIN(r->idx, arrlen(wss[wi].cols)), c);
+    else if (wss[wi].selcol)
+        col = attachnew(wi, wss[wi].selcol, c);
+    else
+        col = attachat(wi, arrlen(wss[wi].cols), c);
     if (r && r->pct > 0)
         setcolwidth(col, (float)r->pct / 100.0f);
-    freelayout(rules);
     return col;
 }
 
+/* follow: switch to the workspace the window's rule sends it to (not while
+ * adopting windows at startup, which would hop around) */
 Client *manage(const Client *t, int follow) {
     Client *c = ecalloc(1, sizeof(Client));
+    Rule *rules = NULL, *r = NULL;
+    Monitor *m;
+    size_t wi;
+    Arg a;
 
     c->win = t->win;
     c->app = t->app;
@@ -552,13 +561,30 @@ Client *manage(const Client *t, int follow) {
     c->y = t->y;
     c->w = t->w;
     c->h = t->h;
-    c->ws = curws;
+    if (c->app && !c->isfloating) { /* dialogs open where you are */
+        rules = loadlayout();
+        r = findrule(rules, c->app);
+    }
+    wi = rulews(r);
+    c->ws = wi;
+    if (r && r->idx == IDXFLOAT) { /* floats like togglefloat: centered */
+        m = wsmon(wi);
+        c->isfloating = 1;
+        c->w = (int)((float)m->w * floatsize);
+        c->h = (int)((float)m->h * floatsize);
+        c->x = c->y = 0;
+    }
     if (c->isfloating) {
         placefloat(c);
-        arrput(curwsp()->floats, c);
+        arrput(wss[wi].floats, c);
     } else {
-        ensurevisible(place(c, follow));
+        ensurevisible(place(c, r, wi));
     }
+    if (wi != curws && follow) {
+        a.i = (int)wi;
+        view(&a);
+    }
+    freelayout(rules);
     arrput(clients, c);
     arrangews(c->ws);
     return c;

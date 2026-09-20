@@ -364,22 +364,27 @@ int main(void) {
     CHECK(arrlen(mons) == 1 && wss[2].mon == 0 && mons[0].ws == 2);
     CHECK(curws == 2 && G(b).x < 0);
 
-    /* placement memory: apps reopen where they were, hand edits apply at
-     * once, `app:::` opts out, `app:::pct` pins a width */
+    /* placement memory: apps reopen on the workspace they were on, to the
+     * right of its selection (no column index is recorded); hand edits
+     * apply at once, `app:::` opts out, `app:::pct` pins a width */
     fresh();
     a = tile("edit");
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0:0:50\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0::50\n"));
     b = tile("web");
     cmdf(setwidth, 0.7f);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nweb:0:1:70\n"));
+                  "edit:0::50\nweb:0::70\n"));
     cmd(sendws, 3);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nweb:3:0:70\n"));
+                  "edit:0::50\nweb:3::70\n"));
     cmd(view, 5);
     c = open_("web", 0, 0, 0, 1, 1); /* follows the placement */
     CHECK(c->ws == 3 && curws == 3 && c->col->width == 0.7f);
-    CHECK(wss[3].cols[0] == c->col && wss[3].cols[1] == b->col);
+    CHECK(wss[3].cols[0] == b->col && wss[3].cols[1] == c->col);
+    focus(b); /* right of the selection, not at the end */
+    d = open_("web", 0, 0, 0, 1, 1);
+    CHECK(wss[3].cols[0] == b->col && wss[3].cols[1] == d->col &&
+          wss[3].cols[2] == c->col);
     cmd(view, 5);
     {
         Client t = {0};
@@ -410,7 +415,36 @@ int main(void) {
     cmd(movehorz, +1); /* nothing to swap with: no change, no write */
     cmd(sendws, 2);
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nfree:::\nwide:::35\nx:y:2:0:40\n"));
+                  "edit:0:0:50\nfree:::\nwide:::35\nx:y:2::40\n"));
+    /* a hand-written index places the window at that column when it lands
+     * on another workspace; on the current one it opens by the selection */
+    cmd(view, 0);
+    focus(a); /* ws 0: [edit(a), d]; the rule says column 0 */
+    c = open_("edit", 0, 0, 0, 1, 1);
+    CHECK(c->ws == 0 && wss[0].cols[1] == c->col);
+    cmd(view, 5);
+    c = open_("edit", 0, 0, 0, 1, 1);
+    CHECK(c->ws == 0 && curws == 0 && wss[0].cols[0] == c->col);
+    /* a hand-written column of -1 opens the app floating, floatsize of the
+     * monitor and centered, on its workspace if it names one; such a line
+     * is never rewritten */
+    {
+        FILE *fp = fopen("/tmp/hwm-test-home/hwm.layout", "w");
+
+        fputs("edit:0:0:50\nnote::-1:\npad:4:-1:\n", fp);
+        fclose(fp);
+    }
+    c = open_("note", 0, 0, 0, 1, 1);
+    CHECK(c->isfloating && !c->col && c->ws == 0 && c->w == 600 &&
+          c->h == 360 && c->x == 200 && c->y == 120);
+    c = open_("pad", 0, 0, 0, 1, 1);
+    CHECK(c->isfloating && c->ws == 4 && curws == 4);
+    focus(c);
+    cmd(togglefloat, 0); /* tiled by hand: the float rule stands */
+    cmdf(setwidth, 0.3f);
+    CHECK(c->col && c->ws == 4);
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
+                  "edit:0:0:50\nnote::-1:\npad:4:-1:\n"));
 
     if (failures)
         fprintf(stderr, "%d failure(s)\n", failures);

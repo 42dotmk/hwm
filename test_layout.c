@@ -23,12 +23,12 @@ const size_t nworkspaces = 10;
 
 static int failures;
 
-#define CHECK(cond)                                                            \
-    do {                                                                       \
-        if (!(cond)) {                                                         \
-            fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);    \
-            failures++;                                                        \
-        }                                                                      \
+#define CHECK(cond)                                                                                                                                            \
+    do {                                                                                                                                                       \
+        if (!(cond)) {                                                                                                                                         \
+            fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);                                                                                    \
+            failures++;                                                                                                                                        \
+        }                                                                                                                                                      \
     } while (0)
 
 /* the fake shell */
@@ -77,8 +77,7 @@ static const LayoutOps ops = {fapply, fraise, ffocus, fdesktop, fwarp, fnow};
 
 static Geom G(Client *c) { return applied[c->win]; }
 
-static Client *open_(const char *app, int floating, int x, int y, int w,
-                     int h) {
+static Client *open_(const char *app, int floating, int x, int y, int w, int h) {
     static unsigned long nextwin = 1;
     Client t = {0};
 
@@ -207,8 +206,7 @@ int main(void) {
 
     /* moving a stacked window splits it out; alone, it swaps columns */
     cmd(movehorz, +1);
-    CHECK(ncols() == 3 && col(0) == c->col && col(1) == a->col &&
-          col(2) == b->col);
+    CHECK(ncols() == 3 && col(0) == c->col && col(1) == a->col && col(2) == b->col);
     CHECK(arrlen(c->col->clients) == 1 && G(c).h == 584);
     cmd(movehorz, +1);
     CHECK(col(1) == b->col && col(2) == a->col);
@@ -278,8 +276,7 @@ int main(void) {
     /* a full column spans the monitor without gaps or borders */
     cmd(togglefull, 0);
     g = G(a);
-    CHECK(a->col->full && g.x == 0 && g.y == 0 && g.w == 1000 && g.h == 600 &&
-          g.bw == 0);
+    CHECK(a->col->full && g.x == 0 && g.y == 0 && g.w == 1000 && g.h == 600 && g.bw == 0);
     cmd(togglefull, 0);
     CHECK(!a->col->full && G(a).bw == 2);
 
@@ -339,8 +336,7 @@ int main(void) {
     fresh();
     a = tile(NULL);
     screen(2);
-    CHECK(arrlen(mons) == 2 && mons[0].ws == 0 && mons[1].ws == 1 &&
-          wss[1].mon == 1);
+    CHECK(arrlen(mons) == 2 && mons[0].ws == 0 && mons[1].ws == 1 && wss[1].mon == 1);
     CHECK(G(a).x == 6);
     cmd(view, 1);
     CHECK(lastwarp == &mons[1]);
@@ -354,8 +350,7 @@ int main(void) {
     /* a workspace moves to the adjacent monitor; the old one shows the next
      * hidden workspace */
     cmd(movewsmon, -1);
-    CHECK(wss[1].mon == 0 && mons[0].ws == 1 && mons[1].ws == 2 &&
-          wss[2].mon == 1);
+    CHECK(wss[1].mon == 0 && mons[0].ws == 1 && mons[1].ws == 2 && wss[2].mon == 1);
     CHECK(G(b).x == 6 && G(a).x < 0);
     /* a monitor going away hands its workspaces to the one under the pointer
      * and keeps the current workspace visible */
@@ -363,6 +358,27 @@ int main(void) {
     screen(1);
     CHECK(arrlen(mons) == 1 && wss[2].mon == 0 && mons[0].ws == 2);
     CHECK(curws == 2 && G(b).x < 0);
+
+    /* overlapping monitors (mirroring): the point belongs to the current
+     * workspace's monitor, so a key press does not hand the focus back to
+     * the first one; outside the overlap the pointer decides as usual */
+    fresh();
+    {
+        Monitor ov[2] = {{0, 0, 1000, 600, 0}, {0, 0, 800, 600, 0}};
+
+        setmons(ov, 2, -1, -1);
+    }
+    a = tile(NULL);
+    CHECK(monat(100, 100) == 0);
+    cmd(view, 1);
+    b = tile(NULL);
+    CHECK(monat(100, 100) == 1);
+    syncmon(monat(100, 100));
+    CHECK(curws == 1 && focused() == b);
+    CHECK(monat(900, 100) == 0);
+    focus(a);
+    CHECK(monat(100, 100) == 0);
+    screen(1);
 
     /* placement memory: apps reopen on the workspace they were on, to the
      * right of its selection (no column index is recorded); hand edits
@@ -372,19 +388,16 @@ int main(void) {
     CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0::50\n"));
     b = tile("web");
     cmdf(setwidth, 0.7f);
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0::50\nweb:0::70\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0::50\nweb:0::70\n"));
     cmd(sendws, 3);
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0::50\nweb:3::70\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0::50\nweb:3::70\n"));
     cmd(view, 5);
     c = open_("web", 0, 0, 0, 1, 1); /* follows the placement */
     CHECK(c->ws == 3 && curws == 3 && c->col->width == 0.7f);
     CHECK(wss[3].cols[0] == b->col && wss[3].cols[1] == c->col);
     focus(b); /* right of the selection, not at the end */
     d = open_("web", 0, 0, 0, 1, 1);
-    CHECK(wss[3].cols[0] == b->col && wss[3].cols[1] == d->col &&
-          wss[3].cols[2] == c->col);
+    CHECK(wss[3].cols[0] == b->col && wss[3].cols[1] == d->col && wss[3].cols[2] == c->col);
     cmd(view, 5);
     {
         Client t = {0};
@@ -406,16 +419,13 @@ int main(void) {
     c = tile("wide");
     CHECK(c->ws == 5 && c->col->width == 0.35f);
     cmdf(setwidth, 0.9f); /* opted-out apps are never recorded */
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nfree:::\nwide:::35\nx:y:1:0:40\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0:0:50\nfree:::\nwide:::35\nx:y:1:0:40\n"));
     c = tile("x:y"); /* app names may hold colons */
     CHECK(c->ws == 1 && curws == 1 && c->col->width == 0.4f);
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nfree:::\nwide:::35\nx:y:1:0:40\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0:0:50\nfree:::\nwide:::35\nx:y:1:0:40\n"));
     cmd(movehorz, +1); /* nothing to swap with: no change, no write */
     cmd(sendws, 2);
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nfree:::\nwide:::35\nx:y:2::40\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0:0:50\nfree:::\nwide:::35\nx:y:2::40\n"));
     /* a hand-written index places the window at that column when it lands
      * on another workspace; on the current one it opens by the selection */
     cmd(view, 0);
@@ -435,16 +445,14 @@ int main(void) {
         fclose(fp);
     }
     c = open_("note", 0, 0, 0, 1, 1);
-    CHECK(c->isfloating && !c->col && c->ws == 0 && c->w == 600 &&
-          c->h == 360 && c->x == 200 && c->y == 120);
+    CHECK(c->isfloating && !c->col && c->ws == 0 && c->w == 600 && c->h == 360 && c->x == 200 && c->y == 120);
     c = open_("pad", 0, 0, 0, 1, 1);
     CHECK(c->isfloating && c->ws == 4 && curws == 4);
     focus(c);
     cmd(togglefloat, 0); /* tiled by hand: the float rule stands */
     cmdf(setwidth, 0.3f);
     CHECK(c->col && c->ws == 4);
-    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"),
-                  "edit:0:0:50\nnote::-1:\npad:4:-1:\n"));
+    CHECK(!strcmp(slurp("/tmp/hwm-test-home/hwm.layout"), "edit:0:0:50\nnote::-1:\npad:4:-1:\n"));
 
     if (failures)
         fprintf(stderr, "%d failure(s)\n", failures);

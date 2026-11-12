@@ -304,8 +304,7 @@ void focus(Client *c) {
 
 /* insert c after col's selection and make it the selection */
 static void attach(Column *col, Client *c) {
-    ptrdiff_t at =
-        col->sel ? clientidx(col, col->sel) + 1 : arrlen(col->clients);
+    ptrdiff_t at = col->sel ? clientidx(col, col->sel) + 1 : arrlen(col->clients);
 
     arrins(col->clients, at, c);
     col->sel = c;
@@ -327,13 +326,9 @@ static Column *attachat(size_t wi, ptrdiff_t at, Client *c) {
 }
 
 /* put c alone into a new column inserted after `after` (NULL = leftmost) */
-static Column *attachnew(size_t wi, Column *after, Client *c) {
-    return attachat(wi, after ? colidx(&wss[wi], after) + 1 : 0, c);
-}
+static Column *attachnew(size_t wi, Column *after, Client *c) { return attachat(wi, after ? colidx(&wss[wi], after) + 1 : 0, c); }
 
-void setcolwidth(Column *col, float w) {
-    col->width = w < 0.1f ? 0.1f : w > 1.0f ? 1.0f : w;
-}
+void setcolwidth(Column *col, float w) { col->width = w < 0.1f ? 0.1f : w > 1.0f ? 1.0f : w; }
 
 /* remove c from its column; empty columns are freed */
 static void detach(Client *c) {
@@ -343,20 +338,12 @@ static void detach(Client *c) {
 
     arrdel(col->clients, i);
     if (col->sel == c)
-        col->sel = arrlen(col->clients)
-                       ? col->clients[i < arrlen(col->clients)
-                                          ? i
-                                          : arrlen(col->clients) - 1]
-                       : NULL;
+        col->sel = arrlen(col->clients) ? col->clients[i < arrlen(col->clients) ? i : arrlen(col->clients) - 1] : NULL;
     if (!arrlen(col->clients)) {
         ci = colidx(ws, col);
         arrdel(ws->cols, ci);
         if (ws->selcol == col)
-            ws->selcol =
-                arrlen(ws->cols)
-                    ? ws->cols[ci < arrlen(ws->cols) ? ci
-                                                     : arrlen(ws->cols) - 1]
-                    : NULL;
+            ws->selcol = arrlen(ws->cols) ? ws->cols[ci < arrlen(ws->cols) ? ci : arrlen(ws->cols) - 1] : NULL;
         arrfree(col->clients);
         free(col);
     }
@@ -523,10 +510,7 @@ void savelayout(Client *c) {
 }
 
 /* the workspace a rule sends its app to, else the current one */
-static size_t rulews(const Rule *r) {
-    return r && r->ws >= 0 && (size_t)r->ws < nworkspaces ? (size_t)r->ws
-                                                          : curws;
-}
+static size_t rulews(const Rule *r) { return r && r->ws >= 0 && (size_t)r->ws < nworkspaces ? (size_t)r->ws : curws; }
 
 /* tile a new window on workspace wi, to the right of its selection, last
  * if nothing is selected; a rule's column index counts only when landing
@@ -610,14 +594,19 @@ void unmanage(Client *c) {
         focus(focused());
 }
 
-size_t monat(int x, int y) {
-    ptrdiff_t i;
+static int inmon(size_t m, int x, int y) { return x >= mons[m].x && x < mons[m].x + mons[m].w && y >= mons[m].y && y < mons[m].y + mons[m].h; }
 
-    for (i = 0; i < arrlen(mons); i++)
-        if (x >= mons[i].x && x < mons[i].x + mons[i].w && y >= mons[i].y &&
-            y < mons[i].y + mons[i].h)
-            return (size_t)i;
-    return wss[curws].mon;
+/* where monitors overlap (mirroring), the current one keeps the point:
+ * otherwise the first would take the focus back on every key press */
+size_t monat(int x, int y) {
+    size_t cur = wss[curws].mon, i;
+
+    if (cur < (size_t)arrlen(mons) && inmon(cur, x, y))
+        return cur;
+    for (i = 0; i < (size_t)arrlen(mons); i++)
+        if (inmon(i, x, y))
+            return i;
+    return cur;
 }
 
 /* a new monitor takes over the first hidden workspace; workspaces of
@@ -928,8 +917,7 @@ void sendws(const Arg *arg) {
     Client *c = focused();
     float width;
 
-    if (!c || arg->i < 0 || (size_t)arg->i >= nworkspaces ||
-        (size_t)arg->i == curws)
+    if (!c || arg->i < 0 || (size_t)arg->i >= nworkspaces || (size_t)arg->i == curws)
         return;
     target = &wss[arg->i];
     if (c->isfloating) {

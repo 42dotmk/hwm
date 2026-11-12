@@ -80,7 +80,7 @@ Workspace *curwsp(void);
 Client *focused(void);
 Monitor *wsmon(size_t wi);
 Client *findclient(unsigned long win);
-size_t monat(int x, int y); /* monitor under a point; curws's if none */
+size_t monat(int x, int y); /* monitor under a point; curws's if several or none */
 
 /* adopt a window: t carries win, app (owned from here on), isfloating and
  * the requested geometry (floats keep it). follow: switch to the workspace
